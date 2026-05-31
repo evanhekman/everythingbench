@@ -17,8 +17,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        cli::Commands::Run { model, benchmark } => {
-            run_benchmark(&model, &benchmark)?;
+        cli::Commands::Run { model, benchmark, publish } => {
+            run_benchmark(&model, &benchmark, publish)?;
+        }
+        cli::Commands::Publish { model, benchmark } => {
+            runner::publish_latest(&model, &benchmark)?;
         }
     }
 

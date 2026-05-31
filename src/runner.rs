@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::Utc;
 use std::fs;
 
-pub fn run_benchmark(model: &str, benchmark: &str) -> Result<()> {
+pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> {
     validate_model(model)?;
 
     if benchmark != "bullshit-dict" {
@@ -21,9 +21,9 @@ pub fn run_benchmark(model: &str, benchmark: &str) -> Result<()> {
 
     let client = XaiClient::new()?;
 
-    // Determine next run number for this model + benchmark
-    let run_dir = format!("results/runs/grok/{}/bullshit-dict", model);
-    let next_run = get_next_run_number(&run_dir)?;
+    // Determine next run number from the *raw* directory
+    let raw_dir = format!("results/raw/grok/{}/{}", model, benchmark);
+    let next_run = get_next_run_number(&raw_dir)?;
 
     println!("Starting run #{} for model {} on {}", next_run, model, benchmark);
 
@@ -89,7 +89,12 @@ pub fn run_benchmark(model: &str, benchmark: &str) -> Result<()> {
         },
     };
 
-    result.write()?;
+    // Always write raw + update latest.json
+    result.write_raw()?;
+
+    if publish {
+        result.publish_to_site()?;
+    }
 
     println!(
         "\nRun complete. Accuracy: {:.1}% ({}/{})",
@@ -101,12 +106,16 @@ pub fn run_benchmark(model: &str, benchmark: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_next_run_number(run_dir: &str) -> Result<u32> {
-    fs::create_dir_all(run_dir)?;
+pub fn publish_latest(model: &str, benchmark: &str) -> Result<()> {
+    crate::results::publish_latest_raw(model, benchmark)
+}
+
+fn get_next_run_number(raw_dir: &str) -> Result<u32> {
+    fs::create_dir_all(raw_dir)?;
 
     let mut max_num = 0u32;
 
-    for entry in fs::read_dir(run_dir)? {
+    for entry in fs::read_dir(raw_dir)? {
         let entry = entry?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
