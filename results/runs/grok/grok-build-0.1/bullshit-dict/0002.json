@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "run_number": 2,
+  "model": "grok-build-0.1",
+  "benchmark": "bullshit-dict",
+  "provider": "grok",
+  "timestamp": "2026-05-31T05:04:05.041927Z",
+  "config": {
+    "temperature": 0.0,
+    "max_tokens": 32
+  },
+  "trials": [
+    {
+      "trial_id": "words0",
+      "words": [
+        "galaxy",
+        "pulse",
+        "enigma",
+        "meadow",
+        "sterling",
+        "abyss",
+        "feather",
+        "catalyst",
+        "wanderer",
+        "silence"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\ngalaxy\npulse\nenigma\nmeadow\nsterling\nabyss\nfeather\ncatalyst\nwanderer\nsilence",
+      "raw_response": "no",
+      "parsed_answer": "no",
+      "correct": true,
+      "latency_ms": 3917
+    },
+    {
+      "trial_id": "words1",
+      "words": [
+        "echo",
+        "filesystem",
+        "eclipse",
+        "eureka",
+        "euleni",
+        "swallowing",
+        "dragon",
+        "snail",
+        "ghost",
+        "nasal",
+        "tragically"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\necho\nfilesystem\neclipse\neureka\neuleni\nswallowing\ndragon\nsnail\nghost\nnasal\ntragically",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": true,
+      "latency_ms": 8257
+    },
+    {
+      "trial_id": "words2",
+      "words": [
+        "dance",
+        "watching",
+        "watches",
+        "watcher",
+        "witch",
+        "battery",
+        "list",
+        "listing",
+        "yacht",
+        "bottled"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\ndance\nwatching\nwatches\nwatcher\nwitch\nbattery\nlist\nlisting\nyacht\nbottled",
+      "raw_response": "no",
+      "parsed_answer": "no",
+      "correct": true,
+      "latency_ms": 2914
+    },
+    {
+      "trial_id": "words3",
+      "words": [
+        "nebula",
+        "whisper",
+        "quantum",
+        "bamboo",
+        "eclipse",
+        "vortex",
+        "lanturn",
+        "cipher",
+        "horizon",
+        "frostbite"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\nnebula\nwhisper\nquantum\nbamboo\neclipse\nvortex\nlanturn\ncipher\nhorizon\nfrostbite",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": true,
+      "latency_ms": 4075
+    },
+    {
+      "trial_id": "words4",
+      "words": [
+        "obsidian",
+        "flicker",
+        "harmony",
+        "drifter",
+        "sapphire",
+        "tempest",
+        "willow",
+        "paradox",
+        "glimmer",
+        "avalanche"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\nobsidian\nflicker\nharmony\ndrifter\nsapphire\ntempest\nwillow\nparadox\nglimmer\navalanche",
+      "raw_response": "no",
+      "parsed_answer": "no",
+      "correct": true,
+      "latency_ms": 3718
+    },
+    {
+      "trial_id": "words5",
+      "words": [
+        "cascade",
+        "ember",
+        "labyrinth",
+        "thunder",
+        "mosaic",
+        "phantom",
+        "radies",
+        "solstice",
+        "velvetino",
+        "zenith"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\ncascade\nember\nlabyrinth\nthunder\nmosaic\nphantom\nradies\nsolstice\nvelvetino\nzenith",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": true,
+      "latency_ms": 3174
+    },
+    {
+      "trial_id": "words6",
+      "words": [
+        "obsidian",
+        "flicker",
+        "harmony",
+        "drifter",
+        "sapphire",
+        "tempest",
+        "willow",
+        "paradox",
+        "glimmer",
+        "cat"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\nobsidian\nflicker\nharmony\ndrifter\nsapphire\ntempest\nwillow\nparadox\nglimmer\ncat",
+      "raw_response": "no",
+      "parsed_answer": "no",
+      "correct": true,
+      "latency_ms": 2763
+    },
+    {
+      "trial_id": "words7",
+      "words": [
+        "crimson",
+        "echo",
+        "nomad",
+        "prism",
+        "serene",
+        "talon",
+        "mystic",
+        "blizzard",
+        "lagorn",
+        "sparrow"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\ncrimson\necho\nnomad\nprism\nserene\ntalon\nmystic\nblizzard\nlagorn\nsparrow",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": true,
+      "latency_ms": 3803
+    },
+    {
+      "trial_id": "words8",
+      "words": [
+        "mirage",
+        "emberlight",
+        "fortress",
+        "quicksilver",
+        "twilight",
+        "wanderlust",
+        "rift",
+        "chronicle",
+        "dusk",
+        "harbor"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\nmirage\nemberlight\nfortress\nquicksilver\ntwilight\nwanderlust\nrift\nchronicle\ndusk\nharbor",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": false,
+      "latency_ms": 4826
+    },
+    {
+      "trial_id": "words9",
+      "words": [
+        "aurora",
+        "shadow",
+        "pinnacle",
+        "breeze",
+        "oracle",
+        "fracture",
+        "luminous",
+        "tide",
+        "zitempe",
+        "evergreen"
+      ],
+      "prompt": "You will be shown a list of words. Respond with \"yes\" if there is one or more fake words, or \"no\" if every single word is a real English word.\n\nHere are the 10 words:\naurora\nshadow\npinnacle\nbreeze\noracle\nfracture\nluminous\ntide\nzitempe\nevergreen",
+      "raw_response": "yes",
+      "parsed_answer": "yes",
+      "correct": true,
+      "latency_ms": 2819
+    }
+  ],
+  "summary": {
+    "total": 10,
+    "correct": 9,
+    "accuracy": 0.9
+  }
+}

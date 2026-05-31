@@ -1,0 +1,10 @@
+crimson
+echo
+nomad
+prism
+serene
+talon
+mystic
+blizzard
+lagorn
+sparrow

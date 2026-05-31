@@ -1,0 +1,11 @@
+echo
+filesystem
+eclipse
+eureka
+euleni
+swallowing
+dragon
+snail
+ghost
+nasal
+tragically

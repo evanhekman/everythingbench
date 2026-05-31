@@ -1,0 +1,11 @@
+# yes means there *is* a fake word in the list
+words0 no
+words1 yes
+words2 no
+words3 yes
+words4 no
+words5 yes
+words6 no
+words7 yes
+words8 no
+words9 yes

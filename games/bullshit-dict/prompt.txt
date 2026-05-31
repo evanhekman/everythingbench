@@ -1,0 +1,1 @@
+You will be shown a list of words. Respond with "yes" if there is one or more fake words, or "no" if every single word is a real English word.

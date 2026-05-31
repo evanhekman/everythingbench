@@ -1,0 +1,12 @@
+/target
+
+# Raw benchmark runs (only published runs are tracked)
+results/raw/
+results/latest.json
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
