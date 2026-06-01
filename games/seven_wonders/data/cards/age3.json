@@ -1,0 +1,386 @@
+[
+  {
+    "id": "pantheon",
+    "name": "Pantheon",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "altar",
+    "chain_to": []
+  },
+  {
+    "id": "gardens",
+    "name": "Gardens",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "theater",
+    "chain_to": []
+  },
+  {
+    "id": "town_hall",
+    "name": "Town Hall",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "palace",
+    "name": "Palace",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "senate",
+    "name": "Senate",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "library",
+    "chain_to": []
+  },
+  {
+    "id": "lighthouse",
+    "name": "Lighthouse",
+    "age": 3,
+    "color": "yellow",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "caravansery",
+    "chain_to": []
+  },
+  {
+    "id": "haven",
+    "name": "Haven",
+    "age": 3,
+    "color": "yellow",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "forum",
+    "chain_to": []
+  },
+  {
+    "id": "chamber_of_commerce",
+    "name": "Chamber of Commerce",
+    "age": 3,
+    "color": "yellow",
+    "player_count": [
+      4,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "ludus",
+    "name": "Ludus",
+    "age": 3,
+    "color": "yellow",
+    "player_count": [
+      5,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "arena",
+    "name": "Arena",
+    "age": 3,
+    "color": "yellow",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "castrum",
+    "name": "Castrum",
+    "age": 3,
+    "color": "red",
+    "player_count": [
+      4,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "fortifications",
+    "name": "Fortifications",
+    "age": 3,
+    "color": "red",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "walls",
+    "chain_to": []
+  },
+  {
+    "id": "circus",
+    "name": "Circus",
+    "age": 3,
+    "color": "red",
+    "player_count": [
+      4,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "training_ground",
+    "chain_to": []
+  },
+  {
+    "id": "arsenal",
+    "name": "Arsenal",
+    "age": 3,
+    "color": "red",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "siege_workshop",
+    "name": "Siege Workshop",
+    "age": 3,
+    "color": "red",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "laboratory",
+    "chain_to": []
+  },
+  {
+    "id": "lodge",
+    "name": "Lodge",
+    "age": 3,
+    "color": "green",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "dispensary",
+    "chain_to": []
+  },
+  {
+    "id": "academy",
+    "name": "Academy",
+    "age": 3,
+    "color": "green",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "school",
+    "chain_to": []
+  },
+  {
+    "id": "observatory",
+    "name": "Observatory",
+    "age": 3,
+    "color": "green",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "laboratory",
+    "chain_to": []
+  },
+  {
+    "id": "study",
+    "name": "Study",
+    "age": 3,
+    "color": "green",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "school",
+    "chain_to": []
+  },
+  {
+    "id": "university",
+    "name": "University",
+    "age": 3,
+    "color": "green",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": "library",
+    "chain_to": []
+  },
+  {
+    "id": "workers_guild",
+    "name": "Workers Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "craftsmen_guild",
+    "name": "Craftsmen Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "spies_guild",
+    "name": "Spies Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "philosophers_guild",
+    "name": "Philosophers Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "builders_guild",
+    "name": "Builders Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "decorators_guild",
+    "name": "Decorators Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "scientists_guild",
+    "name": "Scientists Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "shipowners_guild",
+    "name": "Shipowners Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  }
+]

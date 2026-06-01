@@ -1,0 +1,398 @@
+[
+  {
+    "id": "lumber_yard",
+    "name": "Lumber Yard",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "stone_pit",
+    "name": "Stone Pit",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "clay_pool",
+    "name": "Clay Pool",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "ore_vein",
+    "name": "Ore Vein",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "timber_yard",
+    "name": "Timber Yard",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "tree_farm",
+    "name": "Tree Farm",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "clay_pit",
+    "name": "Clay Pit",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      3
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "excavation",
+    "name": "Excavation",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "mine",
+    "name": "Mine",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "forest_cave",
+    "name": "Forest Cave",
+    "age": 1,
+    "color": "brown",
+    "player_count": [
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "east_trading_post",
+    "name": "East Trading Post",
+    "age": 1,
+    "color": "yellow",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "forum"
+    ]
+  },
+  {
+    "id": "west_trading_post",
+    "name": "West Trading Post",
+    "age": 1,
+    "color": "yellow",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "forum"
+    ]
+  },
+  {
+    "id": "marketplace",
+    "name": "Marketplace",
+    "age": 1,
+    "color": "yellow",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "caravansery"
+    ]
+  },
+  {
+    "id": "tavern",
+    "name": "Tavern",
+    "age": 1,
+    "color": "yellow",
+    "player_count": [
+      4,
+      5,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "altar",
+    "name": "Altar",
+    "age": 1,
+    "color": "blue",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "pantheon"
+    ]
+  },
+  {
+    "id": "theater",
+    "name": "Theater",
+    "age": 1,
+    "color": "blue",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "gardens"
+    ]
+  },
+  {
+    "id": "baths",
+    "name": "Baths",
+    "age": 1,
+    "color": "blue",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "aqueduct"
+    ]
+  },
+  {
+    "id": "apothecary",
+    "name": "Apothecary",
+    "age": 1,
+    "color": "green",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "stables",
+      "dispensary"
+    ]
+  },
+  {
+    "id": "workshop",
+    "name": "Workshop",
+    "age": 1,
+    "color": "green",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "archery_range",
+      "laboratory"
+    ]
+  },
+  {
+    "id": "scriptorium",
+    "name": "Scriptorium",
+    "age": 1,
+    "color": "green",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "courthouse",
+      "library"
+    ]
+  },
+  {
+    "id": "guard_tower",
+    "name": "Guard Tower",
+    "age": 1,
+    "color": "red",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "barracks",
+    "name": "Barracks",
+    "age": 1,
+    "color": "red",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "well",
+    "name": "Well",
+    "age": 1,
+    "color": "blue",
+    "player_count": [
+      4,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": [
+      "statue"
+    ]
+  },
+  {
+    "id": "stockade",
+    "name": "Stockade",
+    "age": 1,
+    "color": "red",
+    "player_count": [
+      3,
+      7
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "glassworks",
+    "name": "Glassworks",
+    "age": 1,
+    "color": "grey",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "loom",
+    "name": "Loom",
+    "age": 1,
+    "color": "grey",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "press",
+    "name": "Press",
+    "age": 1,
+    "color": "grey",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {},
+    "effect": {},
+    "chain_from": null,
+    "chain_to": []
+  }
+]
