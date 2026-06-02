@@ -9,8 +9,21 @@ use std::fs;
 pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> {
     validate_model(model)?;
 
+    if benchmark == "seven-wonders" {
+        // Special support for manual/AI test: 2 humans + 1 LLM with the given model
+        println!("Starting Seven Wonders with 2 humans + 1 AI ({})", model);
+        use crate::games::seven_wonders::{controller::PlayerController, HumanController, LLMController, run_game};
+        let controllers: Vec<Box<dyn PlayerController>> = vec![
+            Box::new(HumanController::new("Human1".to_string())),
+            Box::new(HumanController::new("Human2".to_string())),
+            Box::new(LLMController::new(model.to_string())),
+        ];
+        run_game(controllers);
+        return Ok(());
+    }
+
     if benchmark != "bullshit-dict" {
-        anyhow::bail!("Only 'bullshit-dict' benchmark is implemented so far");
+        anyhow::bail!("Only 'bullshit-dict' and 'seven-wonders' benchmarks are implemented");
     }
 
     println!("Loading bullshit-dict game...");

@@ -4,15 +4,18 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use super::types::{Neighbor, Trade};
+
 /// Terminal actions. These consume one card from the player's hand and end their turn.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TerminalAction {
-    /// Play the card normally (pay its cost or chain for free).
-    PlayCard { card_id: String },
+    /// Play the card normally (pay its cost or chain for free). `trades` lists explicit purchases
+    /// from neighbors to cover resource deficits (engine validates availability, prices, and rules).
+    PlayCard { card_id: String, trades: Vec<Trade> },
 
     /// Use the card to build the specified stage of the player's wonder.
     /// The card is tucked and removed from the player's available cards.
-    BuildWonder { card_id: String, stage: u8 },
+    BuildWonder { card_id: String, stage: u8, trades: Vec<Trade> },
 
     /// Discard the card for coins.
     BurnCard { card_id: String },

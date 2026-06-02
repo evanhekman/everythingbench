@@ -9,7 +9,11 @@
       4
     ],
     "cost": {},
-    "effect": {},
+    "effect": {
+      "production": {
+        "wood": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -23,7 +27,11 @@
       5
     ],
     "cost": {},
-    "effect": {},
+    "effect": {
+      "production": {
+        "stone": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -76,8 +84,14 @@
     "player_count": [
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "or": ["wood", "clay"]
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -89,8 +103,14 @@
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "or": ["clay", "ore"]
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -128,8 +148,14 @@
     "player_count": [
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "or": ["wood", "stone"]
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -142,8 +168,16 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "trade_discount": {
+        "direction": "right",
+        "kind": "raw",
+        "cost": 1
+      }
+    },
     "chain_from": null,
     "chain_to": [
       "forum"
@@ -158,8 +192,16 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "trade_discount": {
+        "direction": "left",
+        "kind": "raw",
+        "cost": 1
+      }
+    },
     "chain_from": null,
     "chain_to": [
       "forum"
@@ -237,8 +279,12 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 1
+    },
+    "effect": {
+      "points": 3
+    },
     "chain_from": null,
     "chain_to": [
       "aqueduct"
@@ -270,8 +316,12 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "glass": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
     "chain_from": null,
     "chain_to": [
       "archery_range",
@@ -362,8 +412,14 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "glass": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },

@@ -3,7 +3,7 @@
 //! This module is responsible for loading the JSON data from
 //! `games/seven_wonders/data/cards/` and turning it into usable Rust types.
 
-pub use super::types::{Card, Cost, Effect};
+pub use super::types::{Card, Cost, DiscountType, Effect, Neighbor, Resource, Resources, ScienceSymbol};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -26,6 +26,114 @@ struct RawCardData {
     pub chain_from: Option<serde_json::Value>,
     #[serde(default)]
     pub chain_to: Vec<String>,
+}
+
+/// Parse a resource name from JSON keys.
+fn parse_resource(s: &str) -> Option<Resource> {
+    match s {
+        "wood" => Some(Resource::Wood),
+        "stone" => Some(Resource::Stone),
+        "ore" => Some(Resource::Ore),
+        "clay" => Some(Resource::Clay),
+        "glass" => Some(Resource::Glass),
+        "loom" => Some(Resource::Loom),
+        "papyrus" => Some(Resource::Papyrus),
+        _ => None,
+    }
+}
+
+/// Parse cost object from the raw JSON (supports flat "coins" + resource keys like "glass": 1).
+fn parse_cost(v: &serde_json::Value) -> Cost {
+    let mut cost = Cost::default();
+    if let Some(obj) = v.as_object() {
+        if let Some(c) = obj.get("coins").and_then(|x| x.as_u64()) {
+            cost.coins = c as u8;
+        }
+        for (k, val) in obj {
+            if k == "coins" {
+                continue;
+            }
+            if let Some(amt) = val.as_u64() {
+                if let Some(res) = parse_resource(k) {
+                    cost.resources.add(res, amt as u8);
+                }
+            }
+        }
+    }
+    cost
+}
+
+/// Parse effect from raw JSON. Supports "production" (fixed or {"or": [...] } for combos),
+/// "science", "trade_discount", "points", "coins".
+fn parse_effect(v: &serde_json::Value) -> Effect {
+    if let Some(obj) = v.as_object() {
+        if let Some(prod_v) = obj.get("production") {
+            if let Some(pobj) = prod_v.as_object() {
+                if let Some(or_v) = pobj.get("or").and_then(|x| x.as_array()) {
+                    let choices: Vec<Resource> = or_v
+                        .iter()
+                        .filter_map(|x| x.as_str().and_then(parse_resource))
+                        .collect();
+                    return Effect::Production {
+                        fixed: Resources::default(),
+                        choice: Some(choices),
+                    };
+                } else {
+                    let mut fixed = Resources::default();
+                    for (k, val) in pobj {
+                        if let Some(amt) = val.as_u64() {
+                            if let Some(res) = parse_resource(k) {
+                                fixed.add(res, amt as u8);
+                            }
+                        }
+                    }
+                    return Effect::Production {
+                        fixed,
+                        choice: None,
+                    };
+                }
+            }
+        }
+        if let Some(sci) = obj.get("science").and_then(|x| x.as_str()) {
+            let sym = match sci {
+                "compass" => ScienceSymbol::Compass,
+                "tablet" => ScienceSymbol::Tablet,
+                "gear" | "cog" => ScienceSymbol::Gear,
+                _ => return Effect::Other(v.clone()),
+            };
+            return Effect::Science(sym);
+        }
+        if let Some(dv) = obj.get("trade_discount") {
+            if let Some(dobj) = dv.as_object() {
+                let direction = match dobj.get("direction").and_then(|x| x.as_str()) {
+                    Some("left") => Some(Neighbor::Left),
+                    Some("right") => Some(Neighbor::Right),
+                    _ => None,
+                };
+                let kind = match dobj.get("kind").and_then(|x| x.as_str()) {
+                    Some("raw") => DiscountType::RawMaterials,
+                    Some("manufactured") => DiscountType::ManufacturedGoods,
+                    _ => return Effect::Other(v.clone()),
+                };
+                let cost = dobj.get("cost").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
+                return Effect::TradeDiscount {
+                    direction,
+                    kind,
+                    cost,
+                };
+            }
+        }
+        if let Some(pts) = obj.get("points").and_then(|x| x.as_i64()) {
+            return Effect::VictoryPoints(pts as i32);
+        }
+        if let Some(coins) = obj.get("coins").and_then(|x| x.as_i64()) {
+            return Effect::Coins(coins as i32);
+        }
+        if !obj.is_empty() {
+            return Effect::Other(v.clone());
+        }
+    }
+    Effect::default()
 }
 
 #[derive(Debug, Clone)]
@@ -58,20 +166,8 @@ impl CardDatabase {
     }
 
     fn from_raw(raw: RawCardData) -> Card {
-        // For now we do a very light conversion.
-        // Cost and Effect will be improved as we populate the JSON data.
-        let cost = if raw.cost.is_object() && raw.cost.as_object().map_or(false, |o| !o.is_empty()) {
-            // Very rough for now; we'll refine when we model costs properly.
-            Cost { coins: 0, resources: Default::default() }
-        } else {
-            Cost::default()
-        };
-
-        let effect = if raw.effect.is_object() && raw.effect.as_object().map_or(false, |o| !o.is_empty()) {
-            Effect::Other(raw.effect)
-        } else {
-            Effect::default()
-        };
+        let cost = parse_cost(&raw.cost);
+        let effect = parse_effect(&raw.effect);
 
         Card {
             id: raw.id,
@@ -98,5 +194,22 @@ impl CardDatabase {
     /// Internal for now: access to by_age map (used by GameState setup).
     pub(crate) fn by_age(&self) -> &HashMap<u8, Vec<String>> {
         &self.by_age
+    }
+
+    /// Returns the list of card ids for the age, with multiplicity based on player_count for the given N players.
+    /// For guilds (color purple), this returns all qualifying, the selection of N+2 is done at deal time.
+    pub fn build_age_pool(&self, age: u8, players: u8) -> Vec<String> {
+        let mut pool = Vec::new();
+        if let Some(ids) = self.by_age.get(&age) {
+            for id in ids {
+                if let Some(card) = self.cards.get(id) {
+                    let copies = card.player_count.iter().filter(|&&p| p <= players).count();
+                    for _ in 0..copies {
+                        pool.push(id.clone());
+                    }
+                }
+            }
+        }
+        pool
     }
 }

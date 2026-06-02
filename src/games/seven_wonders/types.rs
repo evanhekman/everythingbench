@@ -64,6 +64,27 @@ pub enum ScienceSymbol {
     Gear, // cog
 }
 
+/// Left or right neighbor for trading / direction specific effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Neighbor {
+    Left,
+    Right,
+}
+
+/// Represents a single resource purchase from a neighbor as part of playing a card or wonder stage.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Trade {
+    pub from: Neighbor,
+    pub resource: Resource,
+}
+
+/// Type of goods affected by trade discounts (yellow cards like trading posts, marketplace, forum).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DiscountType {
+    RawMaterials,
+    ManufacturedGoods,
+}
+
 /// The effect of playing a card or building a wonder stage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Effect {
@@ -89,6 +110,13 @@ pub enum Effect {
     PointsPerNeighbor {
         color: String,
         amount: i32,
+    },
+    /// Trade cost reduction (e.g. from East/West Trading Post, Marketplace, Forum).
+    /// direction=None means both neighbors.
+    TradeDiscount {
+        direction: Option<Neighbor>,
+        kind: DiscountType,
+        cost: u8,
     },
     /// Other / future effects (e.g. free build, etc.)
     Other(serde_json::Value),

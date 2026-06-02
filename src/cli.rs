@@ -14,7 +14,7 @@ pub enum Commands {
         /// Model name (must be in the known allowlist)
         model: String,
 
-        /// Benchmark / game to run (e.g. bullshit-dict)
+        /// Benchmark / game to run (e.g. bullshit-dict or seven-wonders)
         benchmark: String,
 
         /// Publish this run to the website after completion

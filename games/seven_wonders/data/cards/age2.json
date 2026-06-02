@@ -22,8 +22,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "glass": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -180,8 +186,16 @@
       6,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 3
+    },
+    "effect": {
+      "trade_discount": {
+        "direction": null,
+        "kind": "manufactured",
+        "cost": 1
+      }
+    },
     "chain_from": [
       "east_trading_post",
       "west_trading_post"
