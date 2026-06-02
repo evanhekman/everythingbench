@@ -2,7 +2,8 @@
 //!
 //! Current focus: supporting the incremental validation plan.
 
-use super::cards::{CardDatabase, CardData};
+use super::cards::CardDatabase;
+use super::types::Card;
 use std::collections::HashMap;
 
 /// Represents one player's board state.
@@ -76,7 +77,7 @@ impl GameState {
     fn deal_starting_hands(&mut self) {
         let age1_ids: Vec<String> = self
             .card_db
-            .by_age
+            .by_age()
             .get(&1)
             .cloned()
             .unwrap_or_default();
@@ -95,6 +96,22 @@ impl GameState {
     /// Returns the current hand of the given player (card ids).
     pub fn get_hand(&self, player: usize) -> &[String] {
         &self.players[player].current_hand
+    }
+
+    /// Returns a view of the game from a specific player's perspective.
+    /// This is what an agent (LLM or human) should primarily work with.
+    pub fn view_for_player(&self, player: usize) -> PlayerView {
+        let p = &self.players[player];
+        PlayerView {
+            player_id: player,
+            hand: p.current_hand.clone(),
+            played_cards: p.board.played_cards.clone(),
+            coins: p.board.coins,
+            wonder_stages_built: p.board.wonder_stages_built,
+            wonder_id: p.board.wonder_id.clone(),
+            military_tokens: p.board.military_tokens,
+            // For now, minimal. We will expand observation tools to return richer views.
+        }
     }
 
     /// Attempts to play a card from the player's hand.
@@ -146,6 +163,20 @@ impl GameState {
     pub fn check_my_coins(&self, player: usize) -> u8 {
         self.players[player].board.coins
     }
+}
+
+/// A view of the game from one player's perspective.
+/// Observation tools should return data in (or populate) structures like this.
+#[derive(Debug, Clone)]
+pub struct PlayerView {
+    pub player_id: usize,
+    pub hand: Vec<String>,           // card ids in current hand
+    pub played_cards: Vec<String>,   // own played cards (ids)
+    pub coins: u8,
+    pub wonder_id: String,
+    pub wonder_stages_built: u8,
+    pub military_tokens: i8,
+    // TODO: neighbor info, science, resources summary, etc. will be added via specific tools.
 }
 
 #[cfg(test)]

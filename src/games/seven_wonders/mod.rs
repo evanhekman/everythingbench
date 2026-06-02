@@ -6,9 +6,11 @@
 pub mod actions;
 pub mod cards;
 pub mod state;
+pub mod types;
 
 pub use self::actions::{
     ActionResult, ObservationAction, SevenWondersAction, TerminalAction,
 };
-pub use self::cards::CardDatabase;
-pub use self::state::{GameState, PlayerState, PlayerBoard};
+pub use self::cards::{CardDatabase, Card};
+pub use self::state::{GameState, PlayerBoard, PlayerState, PlayerView};
+pub use self::types::{Cost, Effect, Resource, Resources, ScienceSymbol};
