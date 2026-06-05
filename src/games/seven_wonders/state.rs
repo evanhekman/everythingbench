@@ -536,35 +536,73 @@ impl GameState {
 /// Each round, for each player, the controller's decide_action is called (which can loop observations),
 /// then the terminal action is submitted.
 /// After 6 rounds, battles (stub), next age, etc.
-pub fn run_game(mut controllers: Vec<Box<dyn super::controller::PlayerController>>) {
+pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
+    run_game_with_max_rounds(controllers, u32::MAX);
+}
+
+/// Quick smoke test: runs only the first 2 rounds of age 1.
+/// Useful for fast iteration when testing agents without burning through a full 18-round game.
+pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
+    run_game_with_max_rounds(controllers, 2);
+}
+
+fn run_game_with_max_rounds(mut controllers: Vec<Box<dyn super::controller::PlayerController>>, max_rounds: u32) {
     let n = controllers.len() as u8;
     let mut game = GameState::new(n);
 
-    println!("Starting Seven Wonders game with {} players (all Gizah A).", n);
+    let is_smoke = max_rounds == 2;
+    let label = if is_smoke { " (SMOKE: 2 rounds)" } else { "" };
+    println!("Starting Seven Wonders game{} with {} players (all Gizah A).", label, n);
+
+    let mut total_rounds_played = 0u32;
 
     for age in 1..=3 {
+        if total_rounds_played >= max_rounds {
+            break;
+        }
         game.current_age = age;
         game.start_age();
         println!("\n=== Age {} ===", age);
 
+        let mut rounds_this_age = 0u32;
+
         for round in 1..=6 {
+            if total_rounds_played >= max_rounds {
+                break;
+            }
             game.round_in_age = round;
             game.current_round_actions = vec![None; n as usize];
             println!("\n-- Round {} --", round);
 
             for p in 0..n as usize {
-                let action = controllers[p].decide_action(&game, p);
-                if let SevenWondersAction::Terminal(term) = action {
-                    let res = game.submit_terminal_action(p, term);
-                    println!("Player {} result: {:?}", p, res);
+                loop {
+                    let action = controllers[p].decide_action(&game, p);
+                    if let SevenWondersAction::Terminal(term) = action {
+                        let res = game.submit_terminal_action(p, term);
+                        println!("Player {} result: {:?}", p, res);
+                        if matches!(res, ActionResult::Success { .. }) {
+                            break;
+                        } else {
+                            // Re-ask this player (human re-prompts; LLM re-queries model).
+                            // This matches the agent contract: invalids are reported, choose again.
+                        }
+                    }
                 }
             }
+            total_rounds_played += 1;
+            rounds_this_age += 1;
         }
 
-        game.resolve_battles();
+        if rounds_this_age == 6 {
+            game.resolve_battles();
+        }
     }
 
-    println!("\nGame finished (full scoring/battles stubbed for now).");
+    if is_smoke {
+        println!("\nSmoke game finished after 2 rounds (full scoring/battles stubbed for now).");
+    } else {
+        println!("\nGame finished (full scoring/battles stubbed for now).");
+    }
 }
 
 /// A view of the game from one player's perspective.
@@ -819,5 +857,58 @@ mod tests {
         } else {
             panic!("expected invalid for buying both from combo");
         }
+    }
+
+    #[test]
+    fn smoke_scenario_green_cards_require_commodities_even_after_pass() {
+        // Repro the user's smoke run situation (after r1 plays that succeeded, hands passed left)
+        // p1 played loom (grey producer), p2 played west_trading_post
+        // Then in "r2", p0 has scriptorium (needs papyrus) in hand, no papyrus produced yet -> should fail
+        // p1 has apothecary (needs loom), and p1 owns loom from r1 play -> should succeed
+        let mut game = GameState::new(3);
+
+        // Simulate post r1 state (no resolve needed for this, we set hands and played directly)
+        game.players[1].board.played_cards = vec!["loom".to_string()];
+        game.players[2].board.played_cards = vec!["west_trading_post".to_string()];
+        game.players[2].board.coins = 2; // after paying for the post
+
+        // The hands as seen in user's r2 (6 cards each)
+        game.players[0].current_hand = vec![
+            "scriptorium".to_string(), "stockade".to_string(), "stone_pit".to_string(),
+            "theater".to_string(), "timber_yard".to_string(), "workshop".to_string(),
+        ];
+        game.players[1].current_hand = vec![
+            "apothecary".to_string(), "barracks".to_string(), "baths".to_string(),
+            "clay_pit".to_string(), "clay_pool".to_string(), "east_trading_post".to_string(),
+        ];
+        game.players[2].current_hand = vec![
+            "glassworks".to_string(), "guard_tower".to_string(), "lumber_yard".to_string(),
+            "marketplace".to_string(), "ore_vein".to_string(), "press".to_string(),
+        ];
+
+        // p0 tries scriptorium (papyrus req, but press not played by anyone; p2 has it in the hand but not played)
+        let action = TerminalAction::PlayCard {
+            card_id: "scriptorium".to_string(),
+            trades: vec![],
+        };
+        let res = game.submit_terminal_action(0, action);
+        assert!(
+            matches!(res, ActionResult::Invalid { ref reason, .. } if reason.contains("papyrus") || reason.contains("resource") || reason.contains("Insufficient")),
+            "scriptorium should be invalid without papyrus producer: {:?}", res
+        );
+        // hand unchanged
+        assert!(game.players[0].current_hand.contains(&"scriptorium".to_string()));
+
+        // Now p1 tries apothecary (loom req); p1 has loom in played from "r1", so own production covers
+        let action2 = TerminalAction::PlayCard {
+            card_id: "apothecary".to_string(),
+            trades: vec![],
+        };
+        let res2 = game.submit_terminal_action(1, action2);
+        // This should succeed because loom is in p1's own played_cards
+        assert!(
+            matches!(res2, ActionResult::Success { .. }),
+            "apothecary should succeed because player owns loom production: {:?}", res2
+        );
     }
 }

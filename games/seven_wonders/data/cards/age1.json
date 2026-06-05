@@ -216,8 +216,16 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "trade_discount": {
+        "direction": null,
+        "kind": "manufactured",
+        "cost": 1
+      }
+    },
     "chain_from": null,
     "chain_to": [
       "caravansery"
@@ -247,8 +255,12 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 1
+    },
+    "effect": {
+      "points": 2
+    },
     "chain_from": null,
     "chain_to": [
       "pantheon"
@@ -299,8 +311,12 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "loom": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
     "chain_from": null,
     "chain_to": [
       "stables",
@@ -337,8 +353,12 @@
       3,
       4
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "papyrus": 1
+    },
+    "effect": {
+      "science": "tablet"
+    },
     "chain_from": null,
     "chain_to": [
       "courthouse",
@@ -432,8 +452,14 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "loom": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -446,8 +472,14 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "papyrus": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   }

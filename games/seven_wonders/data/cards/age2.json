@@ -8,8 +8,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "loom": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -42,8 +48,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "papyrus": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },

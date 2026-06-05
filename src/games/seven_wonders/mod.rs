@@ -13,6 +13,6 @@ pub use self::actions::{
     ActionResult, ObservationAction, SevenWondersAction, TerminalAction,
 };
 pub use self::cards::{CardDatabase, Card};
-pub use self::state::{GameState, PlayerBoard, PlayerState, PlayerView, run_game};
+pub use self::state::{GameState, PlayerBoard, PlayerState, PlayerView, run_game, run_smoke_game};
 pub use self::controller::{HumanController, LLMController, PlayerController};
 pub use self::types::{Cost, DiscountType, Effect, Neighbor, Resource, Resources, ScienceSymbol, Trade};

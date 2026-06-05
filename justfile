@@ -2,6 +2,8 @@
 # Examples:
 #   just run grok-build-0.1 bullshit-dict
 #   just run grok-build-0.1 bullshit-dict --publish
+#   just run grok-build-0.1 seven-wonders   # runs a 3-agent SMOKE (only 2 rounds) with that model
+#   For full game, edit runner.rs temporarily to use run_game instead of run_smoke_game.
 
 run model benchmark *FLAGS:
     cargo run -- run {{model}} {{benchmark}} {{FLAGS}}
