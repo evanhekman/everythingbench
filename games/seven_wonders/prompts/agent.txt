@@ -1,0 +1,70 @@
+# AGENT INSTRUCTIONS
+Here is an example of how you will interact with the game. You will be providing with sections of a log documenting the game, and will be asked to make at least one decision each turn. If your action requires supporing actions (i.e. buying resources from a neighbor), you should specify them before the action. If the action is automatic (i.e. a card is built for free) you do not need to specify it. If you attempt to perform an invalid action, you will receive an error from the engine and will be asked to try again.
+
+This is the structure of the log you will receive in increments:
+```
+<age_N>
+    <round_M>
+        <player_K> ... </player_K>   (for players before you and their actions)
+        <player_YOU>
+        <decision>
+            hand: [altar, ore vein, ...]     (the cards available to you)
+            coins: N                                (how many coins you have)
+            current_wonder_stage: N                 (which level of the wonder you are building)
+            your_production: [wood, stone, stone, ...]      (your resources)
+            left_neighbor_production: [cloth, brick, ...]   (left neighbor resources)
+            right_neighbor_production: [cloth, brick, ...]  (right neighbor resources)
+        </decision>
+        <player_N> ... </player_N>  (for players after you and their actions)
+        </player_YOU>
+        ...
+    </round_M>
+    ...
+    <summary>
+        player_1 has <n> points, <n> coins, <n> milirary
+        player_2 has <n> points, <n> coins, <n> milirary
+        ...
+        player_1 receives -1 from battles
+        player_2 receives +3 from battles
+        ...
+    </summary>
+</age_N>
+```
+
+An error message might look something like this:
+```
+ERROR: Insufficient resources to perform this action. Please select a different action or purchase from neighbors.
+```
+
+YOUR AVAILABLE ACTIONS:
+play <card>
+wonder <card>
+burn <card>
+IF YOU NEED TO PURCHASE A RESOURCE TO BUILD SOMETHING, PUT THIS FIRST
+purchase <resource> (left|right)_neighbor
+
+Purchasing from neighbors requires having enough coins. An example purchase might look like this:
+```
+purchase wood left_neighbor
+build baths
+```
+
+A more complex example might look like this:
+```
+purchase stone left_neighbor
+purchase stone right_neighbor
+purchase stone right_neighbor
+build walls
+```
+
+To play a wonder, pay the cost of the wonder instead of the cost of your card and select any card to bury underneath the wonder slot. For example, this move would bury the altar under your next available wonder slot.
+```
+wonder altar
+```
+
+If you need coins, you may burn a card for +3 coins. Example:
+```
+burn pantheon
+```
+
+You must make an immediate decision using the information in the log. Do not ask questions. The engine will tell you (via error text in place of your next decision block) if the action was invalid. If you attempt 3 invalid actions in a row, you will forfeit the game.

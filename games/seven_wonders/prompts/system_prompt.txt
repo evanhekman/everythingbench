@@ -1,0 +1,13 @@
+# SEVEN WONDERS OVERVIEW
+You are player <current_player> in a <player_count>-player game of Seven Wonders. Your goal is to score as high as possible.
+
+You will interact with the game via an engine, which will process the actions and request input from you when it is your turn. The engine will provide you with all applicable context as the game progresses (what your opponents are building, what cards you have available).
+
+Seven wonders is a game with 3 Ages, each of which has 6 Rounds. You will start with a hand of 7 cards. You will choose one to build and then pass the hand to your left or right, depending on the round. You will then receive a hand of 6 cards, choose again, and so on until only 2 cards are left. The very last card will be discarded, which ends the Age. At the end of each age, if you have more military than your neighbors, you will gain 1/3/5 points (ages 1/2/3). If you have less than your neighbors, you will get -1 point regardless of round.
+
+Some cards have requirements to build. These fall into one of three categories:
+- Some cards require 1 coin to build
+- Some cards require specific resources to build
+- Some cards require resources but can also be built for free if you already have a specific previous card
+
+Next, you will see an overview of all the cards in the game. This is the only time you will see all of the cards in their entirety.

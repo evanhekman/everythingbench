@@ -1,0 +1,4 @@
+user.txt
+
+east = right
+west = left
