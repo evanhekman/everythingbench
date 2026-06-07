@@ -59,7 +59,7 @@ Training Ground (training_ground) | Red | [ore, ore, wood] | +2 military | to ci
 Dispensary (dispensary) | Green | [ore, ore, glass] | +1 compass | from apothecary, to arena, to lodge | [3, 4]
 Laboratory (laboratory) | Green | [brick, brick, paper] | +1 cog | from workshop, to siege_workshop, to lodge | [3, 5]
 Library (library) | Green | [stone, stone, cloth] | +1 tablet | from scriptorium, to senate, to university | [3, 6]
-School (school) | Green | [wood, paper] | +1 tablet | to academy, to study, to university | [3, 7]
+School (school) | Green | [wood, paper] | +1 tablet | to academy, to study | [3, 7]
 
 ### AGE 3
 Pantheon (pantheon) | Blue | [brick, brick, ore, glass, paper, cloth] | +7 points | from altar | [3, 6]
@@ -81,9 +81,9 @@ Lodge (lodge) | Green | [brick, brick, paper, cloth] | +1 compass | from dispens
 Academy (academy) | Green | [stone, stone, stone, glass] | +1 compass | from school | [3, 7]
 Observatory (observatory) | Green | [ore, ore, glass, cloth] | +1 cog | from laboratory | [3, 7]
 Study (study) | Green | [wood, paper, cloth] | +1 cog | from school | [3, 5]
-University (university) | Green | [wood, wood, glass, paper] | +1 tablet | from school, to senate | [3, 4]
+University (university) | Green | [wood, wood, glass, paper] | +1 tablet | from library | [3, 4]
 Worker's Guild (workers_guild) | Purple | [ore, ore, wood, stone, brick] | +1 point for all of each neighbors' brown cards | None | []
-Craftsmen's Guild (craftsmen_guild) | Purple | [stone, stone, ore] | +2 points for all of each neighbors' gray cards | None | []
+Craftsmen's Guild (craftsmens_guild) | Purple | [stone, stone, ore] | +2 points for all of each neighbors' gray cards | None | []
 Magistrate's Guild (magistrates_guild) | Purple | [wood, wood, wood, stone, cloth] | +1 point for all of each neighbor's blue cards | None | []
 Trader's Guild (traders_guild) | Purple | [paper, glass, cloth] | +1 point for all of each neighbor's yellow cards | None | []
 Spies Guild (spies_guild) | Purple | [brick, brick, glass] | +1 point for all of each neighbor's red cards | None | []
