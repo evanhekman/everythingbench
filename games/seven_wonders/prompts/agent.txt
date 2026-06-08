@@ -1,35 +1,87 @@
 # AGENT INSTRUCTIONS
 Here is an example of how you will interact with the game. You will be provided with sections of a log documenting the game, and will be asked to make at least one decision each turn. If your action requires supporting actions (i.e. buying resources from a neighbor), you should specify them before the action. If the action is automatic (i.e. a card is built for free) you do not need to specify it. If you attempt to perform an invalid action, you will receive an error from the engine and will be asked to try again.
 
-This is the structure of the log you will receive in increments:
+This is an example of the log format you will receive (plain text, easy to read and scan). Within a round you only see your own private decision (other players' simultaneous choices are hidden until the round results).
+
 ```
-<age_N>
-    <round_M>
-        <player_K> ... </player_K>   (for players before you and their actions)
-        <player_YOU>
-        <decision>
-            hand: [altar, ore vein, ...]     (the cards available to you)
-            coins: N                                (how many coins you have)
-            current_wonder_stage: N                 (which level of the wonder you are building)
-            your_production: [wood, stone, stone, ...]      (your resources)
-            left_neighbor_production: [cloth, brick, ...]   (left neighbor resources)
-            right_neighbor_production: [cloth, brick, ...]  (right neighbor resources)
-        </decision>
-        <player_N> ... </player_N>  (for players after you and their actions)
-        </player_YOU>
-        ...
-    </round_M>
-    ...
-    <summary>
-        player_1 has <n> points, <n> coins, <n> military
-        player_2 has <n> points, <n> coins, <n> military
-        ...
-        player_1 receives -1 from battles
-        player_2 receives +3 from battles
-        ...
-    </summary>
-</age_N>
+=== AGE 1 ===
+--- Round 1 ---
+--- Your Turn ---
+hand: [baths, scriptorium, timber_yard, marketplace, ...]
+coins: 3
+wonder_stages_built: 0
+your_production: []
+left (Player 0) production: []
+right (Player 2) production: []
+
+(If this is a retry after an invalid move, the error + updated neighbor production will be inserted here.)
+
+Please select your action for this round (play, burn, wonder):
+> agent: play marketplace
+
+Round Summary:
+Player 0 (you) played marketplace
+Player 1 played ore_vein
+Player 2 played glassworks
+
+--- Round 2 ---
+--- Your Turn ---
+hand: [apothecary, workshop, ...]
+coins: 3
+wonder_stages_built: 0
+your_production: []
+left (Player 0) production: [ore]
+right (Player 2) production: [glass]
+
+Please select your action for this round (play, burn, wonder):
+> agent: play apothecary right:glass
+
+Round Summary:
+Player 0 (you) bought glass from player 2
+Player 0 (you) played apothecary
+Player 1 played brickyard
+Player 2 played glassworks
+
+--- Round 3 ---
+--- Your Turn ---
+hand: [scriptorium, east_trading_post, ...]
+coins: 3
+wonder_stages_built: 0
+your_production: []
+left (Player 0) production: [ore, brick]
+right (Player 2) production: [glass]
+
+Please select your action for this round (play, burn, wonder):
+> agent: play east_trading_post
+
+Round Summary:
+Player 0 (you) played east_trading_post
+Player 1 played loom
+Player 2 played west_trading_post
+
+...
+
+--- Age Summary ---
+Player 0 (you) built 0 wonder stages
+Player 1 built 0 wonder stages
+Player 2 built 0 wonder stages
+
+Player 0 (you) gets +1, +1 from battles
+Player 1 gets +1, -1 from battles
+Player 2 gets -1, -1 from battles
+
+=== AGE 2 ===
+...
+
 ```
+
+The log only shows completed previous rounds + your current private decision block. You never see simultaneous decisions other players are making in the current round.
+
+Battles are resolved only at the end of each full age (after round 6), not after individual rounds.
+
+When it is your turn, the log will end with your open decision block (starting with "--- Player X decision ---"). That block contains your private state. Output exactly one line with your action.
+
+Error messages are injected directly into the decision block (e.g. "ERROR: Insufficient stone. Neighbors currently produce: ..."). Read them and correct your next output. You get up to 3 attempts per decision.
 
 An error message might look something like this:
 ```

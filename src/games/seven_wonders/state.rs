@@ -210,12 +210,26 @@ impl GameState {
     /// Build the private info text that goes inside a <decision> block for this player.
     /// Includes current hand (ids), coins, wonder progress, own production, and what the two
     /// neighbors can currently supply (fixed + their choice slots). Used by the log + LLM prompt.
+    pub(crate) fn friendly_resource(r: Resource) -> &'static str {
+        match r {
+            Resource::Clay => "brick",
+            Resource::Papyrus => "paper",
+            Resource::Loom => "cloth",
+            Resource::Wood => "wood",
+            Resource::Stone => "stone",
+            Resource::Ore => "ore",
+            Resource::Glass => "glass",
+        }
+    }
+
     pub fn get_private_decision_info(&self, player: usize) -> String {
         let hand = self.players[player].current_hand.clone();
         let coins = self.players[player].board.coins;
         let stages = self.players[player].board.wonder_stages_built;
+
         let my_fixed = self.compute_fixed_production(player);
         let my_choices = self.collect_choice_options(player);
+        let your_prod = Self::format_production_list(&my_fixed, &my_choices);
 
         let left_p = self.neighbor_player(player, Neighbor::Left);
         let right_p = self.neighbor_player(player, Neighbor::Right);
@@ -223,21 +237,39 @@ impl GameState {
         let right_fixed = self.compute_fixed_production(right_p);
         let left_choices = self.collect_choice_options(left_p);
         let right_choices = self.collect_choice_options(right_p);
+        let left_prod = Self::format_production_list(&left_fixed, &left_choices);
+        let right_prod = Self::format_production_list(&right_fixed, &right_choices);
 
         format!(
             "hand: {:?}\ncoins: {}\nwonder_stages_built: {}\n\
-your_production: fixed={:?} choice_slots={:?}\n\n\
-left_player_{}_production: fixed={:?} choice_slots={:?}\n\
-right_player_{}_production: fixed={:?} choice_slots={:?}\n\n\
-Choose exactly one action now (trades optional, one unit per mention):\n\
-  play <card_id> [left:res[:n] ...]\n\
-  wonder <card_id> <stage> [trades...]\n\
-  burn <card_id>",
+your_production: [{}]\n\
+left (Player {}) production: [{}]\n\
+right (Player {}) production: [{}]",
             hand, coins, stages,
-            my_fixed, my_choices,
-            left_p, left_fixed, left_choices,
-            right_p, right_fixed, right_choices
+            your_prod.join(", "),
+            left_p, left_prod.join(", "),
+            right_p, right_prod.join(", ")
         )
+    }
+
+    pub(crate) fn format_production_list(fixed: &Resources, choices: &[Vec<Resource>]) -> Vec<String> {
+        let mut list = vec![];
+        for (r, &amt) in &fixed.counts {
+            let name = Self::friendly_resource(*r);
+            for _ in 0..amt {
+                list.push(name.to_string());
+            }
+        }
+        for ch in choices {
+            if ch.is_empty() { continue; }
+            if ch.len() == 1 {
+                list.push(Self::friendly_resource(ch[0]).to_string());
+            } else {
+                let joined: Vec<String> = ch.iter().map(|&r| Self::friendly_resource(r).to_string()).collect();
+                list.push(joined.join("/"));
+            }
+        }
+        list
     }
 
     /// Public summary text for the <summary> tag after a round resolves (coins + played cards).
@@ -748,9 +780,13 @@ pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::P
                                     let right = game.neighbor_player(p, Neighbor::Right);
                                     let lfixed = game.compute_fixed_production(left);
                                     let rfixed = game.compute_fixed_production(right);
+                                    let lchoices = game.collect_choice_options(left);
+                                    let rchoices = game.collect_choice_options(right);
+                                    let llist = GameState::format_production_list(&lfixed, &lchoices);
+                                    let rlist = GameState::format_production_list(&rfixed, &rchoices);
                                     let neigh = format!(
-                                        "\nNeighbors' current production (what you can buy from):\n  left (player {}): {:?}\n  right (player {}): {:?}\n\nWhat do you want to buy? Append trades to your play/wonder (e.g. play baths left:stone:1) or pick a card you can afford outright.\n",
-                                        left, lfixed, right, rfixed
+                                        "\nNeighbors' current production (what you can buy from):\n  left (player {}): [{}]\n  right (player {}): [{}]\n\nWhat do you want to buy? Use left:res or right:res (repeat for multiples, e.g. left:stone left:stone). Or pick a different card you can afford outright.\n",
+                                        left, llist.join(", "), right, rlist.join(", ")
                                     );
                                     game_log.append_to_current_decision(&neigh);
                                 }
