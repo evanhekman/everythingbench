@@ -20,6 +20,13 @@ fn main() -> Result<()> {
         cli::Commands::Run { model, benchmark, publish } => {
             run_benchmark(&model, &benchmark, publish)?;
         }
+        cli::Commands::SevenWonders {
+            player_count,
+            players,
+            rounds,
+        } => {
+            runner::run_seven_wonders(player_count, &players, rounds)?;
+        }
         cli::Commands::Publish { model, benchmark } => {
             runner::publish_latest(&model, &benchmark)?;
         }

@@ -14,6 +14,97 @@ fn load_prompt_file(name: &str) -> String {
     }
 }
 
+/// Load the player-count-specific card list (cards3.txt … cards7.txt).
+fn load_cards_for_players(player_count: u8) -> String {
+    let specific = format!("cards{}.txt", player_count);
+    let content = load_prompt_file(&specific);
+    if !content.starts_with("[MISSING") {
+        return content;
+    }
+    load_prompt_file("cards.txt")
+}
+
+fn parse_resource(s: &str) -> Option<super::types::Resource> {
+    match s {
+        "wood" => Some(super::types::Resource::Wood),
+        "stone" => Some(super::types::Resource::Stone),
+        "ore" => Some(super::types::Resource::Ore),
+        "clay" | "brick" => Some(super::types::Resource::Clay),
+        "glass" => Some(super::types::Resource::Glass),
+        "loom" | "cloth" => Some(super::types::Resource::Loom),
+        "papyrus" | "paper" => Some(super::types::Resource::Papyrus),
+        _ => None,
+    }
+}
+
+fn parse_trades(tail: &str) -> Vec<super::types::Trade> {
+    use super::types::{Neighbor, Trade};
+    let mut out = vec![];
+    for tok in tail.split_whitespace() {
+        let t = tok.to_lowercase();
+        let (side_part, res_part) = if let Some(p) = t.split_once(':') { p } else { continue };
+        let neigh = match side_part {
+            "left" | "l" => Neighbor::Left,
+            "right" | "r" => Neighbor::Right,
+            _ => continue,
+        };
+        if res_part.contains(':') {
+            continue;
+        }
+        if let Some(res) = parse_resource(res_part) {
+            out.push(Trade { from: neigh, resource: res });
+        }
+    }
+    out
+}
+
+/// Parse one agent action line: `play baths`, `play baths left:stone`, `wonder altar`, `burn card`.
+pub fn parse_agent_action_line(
+    line: &str,
+    hand: &[String],
+    wonder_stages_built: u8,
+) -> Option<SevenWondersAction> {
+    let cleaned = line.trim().to_lowercase();
+    if cleaned.is_empty() {
+        return None;
+    }
+    let trades = if cleaned.contains(':') {
+        parse_trades(&cleaned)
+    } else {
+        vec![]
+    };
+    let without_trades: String = cleaned
+        .split_whitespace()
+        .filter(|t| !t.contains(':'))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if without_trades.starts_with("play ") {
+        let card = without_trades[5..].split_whitespace().next()?.to_string();
+        if hand.contains(&card) {
+            return Some(SevenWondersAction::Terminal(TerminalAction::PlayCard {
+                card_id: card,
+                trades,
+            }));
+        }
+    } else if without_trades.starts_with("wonder ") {
+        let card = without_trades[7..].split_whitespace().next()?.to_string();
+        if hand.contains(&card) {
+            return Some(SevenWondersAction::Terminal(TerminalAction::BuildWonder {
+                card_id: card,
+                stage: wonder_stages_built + 1,
+                trades,
+            }));
+        }
+    } else if without_trades.starts_with("burn ") {
+        let card = without_trades[5..].split_whitespace().next()?.to_string();
+        if hand.contains(&card) {
+            return Some(SevenWondersAction::Terminal(TerminalAction::BurnCard { card_id: card }));
+        }
+    }
+    None
+}
+
 pub trait PlayerController {
     /// Whether this controller wants a rich log context string (instead of / in addition to raw GameState).
     /// LLM controllers return true so the runner supplies the personalized plain-text log view.
@@ -135,45 +226,6 @@ impl LLMController {
         let client = crate::models::xai::XaiClient::new().ok();
         Self { model, client }
     }
-
-    /// Parse a resource name (lowercased id like "wood", "papyrus").
-    fn parse_res(s: &str) -> Option<super::types::Resource> {
-        match s {
-            "wood" => Some(super::types::Resource::Wood),
-            "stone" => Some(super::types::Resource::Stone),
-            "ore" => Some(super::types::Resource::Ore),
-            "clay" => Some(super::types::Resource::Clay),
-            "glass" => Some(super::types::Resource::Glass),
-            "loom" => Some(super::types::Resource::Loom),
-            "papyrus" => Some(super::types::Resource::Papyrus),
-            _ => None,
-        }
-    }
-
-    /// Parse trades from the tail of a model response using dir:resource notation.
-    /// Repeat the token for multiple units, e.g. "left:wood right:stone left:stone".
-    /// Only simple "dir:res" form is supported (no :n count suffix).
-    fn parse_trades(tail: &str) -> Vec<super::types::Trade> {
-        use super::types::{Neighbor, Trade};
-        let mut out = vec![];
-        for tok in tail.split_whitespace() {
-            let t = tok.to_lowercase();
-            let (side_part, res_part) = if let Some(p) = t.split_once(':') { p } else { continue };
-            let neigh = match side_part {
-                "left" | "l" => Neighbor::Left,
-                "right" | "r" => Neighbor::Right,
-                _ => continue,
-            };
-            // Only support simple dir:res; if res_part contains ":", it's old :n form -> skip to fail fast
-            if res_part.contains(':') {
-                continue;
-            }
-            if let Some(res) = Self::parse_res(res_part) {
-                out.push(Trade { from: neigh, resource: res });
-            }
-        }
-        out
-    }
 }
 
 impl PlayerController for LLMController {
@@ -195,16 +247,11 @@ impl PlayerController for LLMController {
         // system_prompt.txt is passed as the system message.
         // The user message combines agent.txt + cards.txt + user.txt (placeholder) + current log context.
         let system_prompt = load_prompt_file("system_prompt.txt");
-        let agent_txt = load_prompt_file("agent.txt");
-        let cards_txt = load_prompt_file("cards.txt");
-        let user_txt = load_prompt_file("user.txt");
 
         let user_prompt = if let Some(view) = log_view {
-            // The view contains the open decision block with private info + any retry errors.
-            // Prepend the static agent instructions, cards reference, and user placeholder.
             format!(
-                "{}\n\n{}\n\n{}\n\nCurrent log context for your decision (player {}):\n{}\n\nOutput exactly one action line:",
-                agent_txt, cards_txt, user_txt, player, view
+                "{}\n\nOutput exactly one action line:",
+                build_decision_context(game, player, view, true)
             )
         } else {
             // Legacy fallback (no log view supplied)
@@ -229,53 +276,23 @@ impl PlayerController for LLMController {
             match client.complete(&self.model, &user_prompt, Some(&system_prompt), max_toks) {
                 Ok((response, latency_ms)) => {
                     println!("[LLM p{}] raw ({}ms): {}", player, latency_ms, response);
-                    let cleaned = response.trim().to_lowercase();
-
-                    // Parse action + optional trailing trades.
-                    let (cmd, tail) = if let Some(sp) = cleaned.find(' ') {
-                        (&cleaned[..sp], cleaned[sp..].trim())
-                    } else {
-                        (cleaned.as_str(), "")
-                    };
-                    let trades = Self::parse_trades(tail);
-
-                    let chosen = if cmd == "play" || cleaned.starts_with("play ") {
-                        // card is the token after "play "
-                        let after = if cleaned.starts_with("play ") { &cleaned[5..] } else { &cleaned[4..] };
-                        let card = after.split_whitespace().next().unwrap_or("").to_string();
-                        if hand.contains(&card) {
-                            Some(SevenWondersAction::Terminal(TerminalAction::PlayCard { card_id: card, trades }))
-                        } else { None }
-                    } else if cmd == "wonder" || cleaned.starts_with("wonder ") {
-                        let parts: Vec<&str> = if cleaned.starts_with("wonder ") { cleaned[7..].trim().split_whitespace().collect() } else { cleaned[6..].trim().split_whitespace().collect() };
-                        if parts.len() == 1 {
-                            let card = parts[0].to_string();
-                            let stage: u8 = view.wonder_stages_built + 1;
-                            if hand.contains(&card) {
-                                Some(SevenWondersAction::Terminal(TerminalAction::BuildWonder { card_id: card, stage, trades }))
-                            } else { None }
-                        } else {
-                            // old mode with stage or invalid -> fail to produce action (will be unparsed)
-                            None
-                        }
-                    } else if cmd == "burn" || cleaned.starts_with("burn ") {
-                        let after = if cleaned.starts_with("burn ") { &cleaned[5..] } else { &cleaned[4..] };
-                        let card = after.split_whitespace().next().unwrap_or("").to_string();
-                        if hand.contains(&card) {
-                            Some(SevenWondersAction::Terminal(TerminalAction::BurnCard { card_id: card }))
-                        } else { None }
-                    } else if let Some(card) = hand.iter().find(|c| cleaned.contains(*c)) {
-                        // Lenient: mention of a card id -> build it (no trades in fallback)
-                        Some(SevenWondersAction::Terminal(TerminalAction::PlayCard { card_id: card.clone(), trades: vec![] }))
-                    } else {
-                        None
-                    };
+                    let chosen = parse_agent_action_line(&response, hand, view.wonder_stages_built)
+                        .or_else(|| {
+                            hand.iter()
+                                .find(|c| response.to_lowercase().contains(c.as_str()))
+                                .map(|card| {
+                                    SevenWondersAction::Terminal(TerminalAction::PlayCard {
+                                        card_id: card.clone(),
+                                        trades: vec![],
+                                    })
+                                })
+                        });
 
                     if let Some(action) = chosen {
                         println!("[LLM p{}] parsed: {:?}", player, action);
                         decided = Some(action);
                     } else {
-                        println!("[LLM p{}] unparsed '{}', fallback", player, cleaned);
+                        println!("[LLM p{}] unparsed '{}', fallback", player, response.trim());
                     }
                 }
                 Err(e) => {
@@ -297,9 +314,99 @@ impl PlayerController for LLMController {
     }
 }
 
-/// Controller for smoke tests: always picks the first card in hand that is
-/// playable (i.e. the engine accepts the PlayCard action with no trades).
-/// Falls back to burning the first card.
+/// Build the user-message body shown to a deciding player.
+/// `full_agent_context`: include agent.txt + cards list (same as LLM user message).
+fn build_decision_context(game: &GameState, player: usize, log_view: &str, full_agent_context: bool) -> String {
+    let user_txt = load_prompt_file("user.txt");
+    if full_agent_context {
+        let agent_txt = load_prompt_file("agent.txt");
+        let cards_txt = load_cards_for_players(game.player_count);
+        format!(
+            "{}\n\n{}\n\n{}\n\nCurrent log context for your decision (player {}):\n{}\n",
+            agent_txt, cards_txt, user_txt, player, log_view
+        )
+    } else {
+        format!(
+            "{}\n\nCurrent log context for your decision (player {}):\n{}\n",
+            user_txt, player, log_view
+        )
+    }
+}
+
+/// Human at the terminal with log-based play.
+/// - `full_agent_context = true` (`human-agent`): same user message as an LLM agent
+/// - `full_agent_context = false` (`human`): only user.txt + live log (no card list or agent instructions)
+pub struct HumanLogController {
+    pub player_label: String,
+    pub full_agent_context: bool,
+}
+
+impl HumanLogController {
+    pub fn as_agent(player_label: String) -> Self {
+        Self {
+            player_label,
+            full_agent_context: true,
+        }
+    }
+
+    pub fn as_human(player_label: String) -> Self {
+        Self {
+            player_label,
+            full_agent_context: false,
+        }
+    }
+}
+
+impl PlayerController for HumanLogController {
+    fn prefers_log_context(&self) -> bool {
+        true
+    }
+
+    fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction {
+        let view = game.view_for_player(player);
+        let hand = &view.hand;
+
+        println!("\n{}", "=".repeat(60));
+        if self.full_agent_context {
+            println!("AGENT CONTEXT — {} (player {})", self.player_label, player);
+            println!("(Same user message an LLM receives; system prompt is API-only)");
+        } else {
+            println!("YOUR TURN — {} (player {})", self.player_label, player);
+        }
+        println!("{}\n", "=".repeat(60));
+
+        if let Some(v) = log_view {
+            println!(
+                "{}",
+                build_decision_context(game, player, v, self.full_agent_context)
+            );
+        }
+
+        println!("{}", "=".repeat(60));
+        println!("Enter one action (play / wonder / burn). Examples:");
+        println!("  play marketplace");
+        println!("  play baths left:stone");
+        println!("  burn lumber_yard");
+        print!("> ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        if let Some(action) = parse_agent_action_line(&input, hand, view.wonder_stages_built) {
+            println!("Parsed: {:?}", action);
+            action
+        } else {
+            println!("Could not parse '{}'. Burning first card in hand.", input.trim());
+            SevenWondersAction::Terminal(TerminalAction::BurnCard {
+                card_id: hand.first().cloned().unwrap_or_else(|| "none".to_string()),
+            })
+        }
+    }
+}
+
+/// Auto player: walks the hand in order, plays the first card the engine accepts
+/// (no neighbor trades). Falls back to burning the first card in hand.
 pub struct FirstPurchaseableController;
 
 impl PlayerController for FirstPurchaseableController {

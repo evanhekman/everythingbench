@@ -1,12 +1,15 @@
-# Run a benchmark
+# Unified run entrypoint (dispatches by first argument)
 # Examples:
 #   just run grok-build-0.1 bullshit-dict
 #   just run grok-build-0.1 bullshit-dict --publish
-#   just run grok-build-0.1 seven-wonders        # normal: 2 humans + 1 AI, full game
-#   just run grok-build-0.1 seven-wonders-smoke  # dedicated smoke: 4 turns, only grok for player 0 (1), autos for 1+2 (2+3)
+#   just run seven-wonders 3 auto human-agent auto --rounds 6
+#
+# Seven Wonders player types: human | human-agent | auto | <model-name>
+#   human       — user.txt + live log only
+#   human-agent — full agent context, terminal input (no API)
 
-run model benchmark *FLAGS:
-    cargo run -- run {{model}} {{benchmark}} {{FLAGS}}
+run +ARGS:
+    bash -eu -o pipefail -c 'if [ "$1" = "seven-wonders" ]; then shift; exec cargo run -- seven-wonders "$@"; else exec cargo run -- run "$@"; fi' -- {{ARGS}}
 
 # Publish the latest raw run for a model+benchmark to the website
 # Example: just publish grok-build-0.1 bullshit-dict

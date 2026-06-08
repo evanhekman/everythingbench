@@ -4,7 +4,9 @@
 
 use super::actions::{ActionResult, SevenWondersAction, TerminalAction, Trade, Neighbor};
 use super::cards::CardDatabase;
+use super::scoring::{self, ScoreBreakdown};
 use super::types::{Cost, DiscountType, Effect, Resource, Resources};
+use serde_json::Value;
 
 /// Represents one player's board state.
 #[derive(Debug, Clone)]
@@ -13,8 +15,9 @@ pub struct PlayerBoard {
     pub wonder_stages_built: u8,     // 0-3 for Gizah A
     pub played_cards: Vec<String>,   // card ids
     pub coins: u8,
-    pub military_tokens: i8,         // can be negative
-    pub science_symbols: Vec<String>,// "cog", "tablet", "compass"
+    pub military_victory_vp: u8,     // accumulated 1/3/5 VP from winning battles each age
+    pub defeat_tokens: u8,           // each worth -1 VP at end of game
+    pub science_symbols: Vec<String>,// "gear", "tablet", "compass"
 }
 
 /// Full state for one player from the engine's perspective.
@@ -36,7 +39,10 @@ pub struct GameState {
     pub current_round_actions: Vec<Option<TerminalAction>>,
     // direction: true for left (player i passes to i+1), false for right
     pub pass_left: bool,
-    // TODO: battle tokens per player, etc.
+    pub game_over: bool,
+    /// Per-player (left_delta, right_delta) from the most recent age's battles.
+    pub last_age_battle_deltas: Vec<(i8, i8)>,
+    pub final_scores: Option<Vec<ScoreBreakdown>>,
 }
 
 impl GameState {
@@ -55,8 +61,9 @@ impl GameState {
                     wonder_id: "gizah_a".to_string(),
                     wonder_stages_built: 0,
                     played_cards: vec![],
-                    coins: 3, // standard for Gizah A? (actually varies, but fine for now)
-                    military_tokens: 0,
+                    coins: 3,
+                    military_victory_vp: 0,
+                    defeat_tokens: 0,
                     science_symbols: vec![],
                 },
                 current_hand: vec![],
@@ -71,6 +78,9 @@ impl GameState {
             card_db,
             current_round_actions: vec![None; player_count as usize],
             pass_left: true, // age 1 and 3 left, age 2 right
+            game_over: false,
+            last_age_battle_deltas: vec![(0, 0); player_count as usize],
+            final_scores: None,
         };
 
         state.start_age();
@@ -146,7 +156,7 @@ impl GameState {
             coins: p.board.coins,
             wonder_stages_built: p.board.wonder_stages_built,
             wonder_id: p.board.wonder_id.clone(),
-            military_tokens: p.board.military_tokens,
+            military_tokens: p.board.defeat_tokens as i8,
             // For now, minimal. We will expand observation tools to return richer views.
         }
     }
@@ -293,15 +303,108 @@ right (Player {}) production: [{}]\n",
             ));
         }
         lines.push(String::new());
-        for i in 0..self.players.len() {
-            let left_delta = 0i8; // stub until military resolution is implemented
-            let right_delta = 0i8;
+        for (i, &(left_delta, right_delta)) in self.last_age_battle_deltas.iter().enumerate() {
             lines.push(format!(
                 "Player {} gets {:+}, {:+} from battles",
                 i, left_delta, right_delta
             ));
         }
         lines.join("\n")
+    }
+
+    pub fn is_game_over(&self) -> bool {
+        self.game_over
+    }
+
+    fn satisfies_chain(&self, player: usize, chain_from: &Option<Value>) -> bool {
+        let Some(val) = chain_from else { return false };
+        let played = &self.players[player].board.played_cards;
+        match val {
+            Value::String(id) => played.iter().any(|c| c == id),
+            Value::Array(ids) => ids.iter().any(|v| {
+                v.as_str()
+                    .map(|id| played.iter().any(|c| c == id))
+                    .unwrap_or(false)
+            }),
+            _ => false,
+        }
+    }
+
+    fn card_military_strength(&self, card_id: &str) -> i32 {
+        let Some(card) = self.card_db.get(card_id) else { return 0 };
+        if let Effect::Military(n) = &card.effect {
+            return *n;
+        }
+        if card.color == "red" {
+            return match card.age {
+                1 => 1,
+                2 => 2,
+                3 => 3,
+                _ => 0,
+            };
+        }
+        0
+    }
+
+    pub fn military_strength(&self, player: usize) -> i32 {
+        self.players[player]
+            .board
+            .played_cards
+            .iter()
+            .map(|cid| self.card_military_strength(cid))
+            .sum()
+    }
+
+    fn apply_card_effect(&mut self, player: usize, card_id: &str) {
+        let Some(card) = self.card_db.get(card_id).cloned() else { return };
+        match &card.effect {
+            Effect::Coins(n) => {
+                if *n > 0 {
+                    self.players[player].board.coins =
+                        self.players[player].board.coins.saturating_add(*n as u8);
+                }
+            }
+            Effect::Science(sym) => {
+                self.players[player]
+                    .board
+                    .science_symbols
+                    .push(scoring::science_symbol_name(*sym).to_string());
+            }
+            Effect::VictoryPoints(_) | Effect::Military(_) => {}
+            _ => {}
+        }
+    }
+
+    pub(crate) fn discard_end_of_age_cards(&mut self) {
+        for player in &mut self.players {
+            if player.current_hand.len() == 1 {
+                player.current_hand.clear();
+            }
+        }
+    }
+
+    fn battle_reward_for_age(age: u8) -> u8 {
+        match age {
+            1 => 1,
+            2 => 3,
+            3 => 5,
+            _ => 0,
+        }
+    }
+
+    fn finalize_game(&mut self) {
+        let n = self.player_count as usize;
+        let mut scores = Vec::with_capacity(n);
+        for i in 0..n {
+            scores.push(scoring::compute_final_score(
+                &self.card_db,
+                i,
+                &self.players,
+                self.player_count,
+            ));
+        }
+        self.final_scores = Some(scores);
+        self.game_over = true;
     }
 
     // ==================== Resource / Cost / Trade helpers (for validation & apply) ====================
@@ -474,6 +577,9 @@ right (Player {}) production: [{}]\n",
 
     fn validate_card_play(&self, player: usize, card_id: &str, trades: &[Trade]) -> Result<(), String> {
         let card = self.card_db.get(card_id).ok_or_else(|| "Unknown card".to_string())?;
+        if self.satisfies_chain(player, &card.chain_from) {
+            return Ok(());
+        }
         let cost = &card.cost;
         let bought = self.compute_bought(trades);
         if !self.player_can_cover(player, &cost.resources, &bought) {
@@ -561,8 +667,8 @@ right (Player {}) production: [{}]\n",
     }
 
     fn resolve_round(&mut self) {
-        // Apply actions (remove card from hand, pay costs incl. trades for play/wonder, add production implicitly via played list, +3 for burn)
-        for (i, opt_action) in self.current_round_actions.iter().enumerate() {
+        let actions: Vec<Option<TerminalAction>> = self.current_round_actions.clone();
+        for (i, opt_action) in actions.iter().enumerate() {
             if let Some(action) = opt_action {
                 let card_id = match action {
                     TerminalAction::PlayCard { card_id, .. } => card_id,
@@ -576,11 +682,20 @@ right (Player {}) production: [{}]\n",
                 match action {
                     TerminalAction::PlayCard { card_id, trades } => {
                         self.players[i].board.played_cards.push(card_id.clone());
-                        // pay coin cost of card + trades
-                        let card_c = self.card_db.get(card_id).map(|c| c.cost.coins as u32).unwrap_or(0);
-                        let t_c = self.compute_trade_coins(i, trades);
-                        let pay = (card_c + t_c) as u8;
-                        self.players[i].board.coins = self.players[i].board.coins.saturating_sub(pay);
+                        let chained = self
+                            .card_db
+                            .get(card_id)
+                            .map(|c| self.satisfies_chain(i, &c.chain_from))
+                            .unwrap_or(false);
+                        if !chained {
+                            let card_c =
+                                self.card_db.get(card_id).map(|c| c.cost.coins as u32).unwrap_or(0);
+                            let t_c = self.compute_trade_coins(i, trades);
+                            let pay = (card_c + t_c) as u8;
+                            self.players[i].board.coins =
+                                self.players[i].board.coins.saturating_sub(pay);
+                        }
+                        self.apply_card_effect(i, card_id);
                     }
                     TerminalAction::BuildWonder { stage, trades, .. } => {
                         self.players[i].board.wonder_stages_built += 1;
@@ -603,12 +718,13 @@ right (Player {}) production: [{}]\n",
         self.current_round_actions = vec![None; self.player_count as usize];
 
         if self.round_in_age > 6 {
+            self.discard_end_of_age_cards();
             self.resolve_battles();
             if self.current_age < 3 {
                 self.current_age += 1;
                 self.start_age();
             } else {
-                // TODO: final scoring
+                self.finalize_game();
             }
         }
     }
@@ -630,8 +746,42 @@ right (Player {}) production: [{}]\n",
     }
 
     fn resolve_battles(&mut self) {
-        // Stub: for Gizah A, no military, so no change. Real implementation would compute strength from red cards + wonders.
-        // For now, just placeholder.
+        let n = self.player_count as usize;
+        let age = self.current_age;
+        let win_vp = Self::battle_reward_for_age(age);
+        let mut deltas = vec![(0i8, 0i8); n];
+
+        for i in 0..n {
+            let str_i = self.military_strength(i);
+            let left = self.neighbor_player(i, Neighbor::Left);
+            let right = self.neighbor_player(i, Neighbor::Right);
+            let str_left = self.military_strength(left);
+            let str_right = self.military_strength(right);
+
+            let left_delta = if str_i > str_left {
+                self.players[i].board.military_victory_vp += win_vp;
+                win_vp as i8
+            } else if str_i < str_left {
+                self.players[i].board.defeat_tokens += 1;
+                -1
+            } else {
+                0
+            };
+
+            let right_delta = if str_i > str_right {
+                self.players[i].board.military_victory_vp += win_vp;
+                win_vp as i8
+            } else if str_i < str_right {
+                self.players[i].board.defeat_tokens += 1;
+                -1
+            } else {
+                0
+            };
+
+            deltas[i] = (left_delta, right_delta);
+        }
+
+        self.last_age_battle_deltas = deltas;
     }
 }
 
@@ -711,131 +861,134 @@ pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::P
     let mut game = GameState::new(n);
     let mut game_log = super::GameLog::new();
 
-    let is_smoke = max_rounds <= 4; // treat 2 or 4 as the dedicated smoke style
-    let label = if max_rounds == 4 { " (SMOKE: 4 rounds, LLM only for player 1)" } else if max_rounds == 2 { " (SMOKE: 2 rounds)" } else { "" };
+    let is_smoke = max_rounds <= 4;
+    let label = if max_rounds == 4 {
+        " (SMOKE: 4 rounds)"
+    } else if max_rounds == 2 {
+        " (SMOKE: 2 rounds)"
+    } else {
+        ""
+    };
     println!("Starting Seven Wonders game{} with {} players (all Gizah A).", label, n);
 
+    game_log.start_age(game.current_age);
+    println!("\n=== Age {} ===", game.current_age);
+
     let mut total_rounds_played = 0u32;
+    while total_rounds_played < max_rounds && !game.is_game_over() {
+        let round = game.round_in_age;
+        game.current_round_actions = vec![None; n as usize];
+        println!("\n-- Round {} (Age {}) --", round, game.current_age);
 
-    for age in 1..=3 {
-        if total_rounds_played >= max_rounds {
-            break;
-        }
-        game.current_age = age;
-        game.start_age();
-        game_log.start_age(age as u8);
-        println!("\n=== Age {} ===", age);
+        game_log.start_round(round);
+        let age_before = game.current_age;
 
-        let mut rounds_this_age = 0u32;
+        for p in 0..n as usize {
+            let prefers_log = controllers[p].prefers_log_context();
 
-        for round in 1..=6 {
-            if total_rounds_played >= max_rounds {
-                break;
-            }
-            game.round_in_age = round;
-            game.current_round_actions = vec![None; n as usize];
-            println!("\n-- Round {} --", round);
+            if prefers_log {
+                let private = game.get_private_decision_info(p);
+                game_log.begin_player_decision(p, private);
 
-            game_log.start_round(round as u8);
+                let mut attempts = 0u32;
+                let mut got_success = false;
 
-            for p in 0..n as usize {
-                let prefers_log = controllers[p].prefers_log_context();
-
-                if prefers_log {
-                    // === Log-using controller (LLM): rich context, 3 attempts, special afford path, errors to model ===
-                    let private = game.get_private_decision_info(p);
-                    game_log.begin_player_decision(p, private);
-
-                    let mut attempts = 0u32;
-                    let mut got_success = false;
-
-                    loop {
-                        attempts += 1;
-                        if attempts > 3 {
-                            println!("[LLM p{}] 3 attempts exhausted for this decision - forcing fallback burn", p);
-                            break;
-                        }
-
-                        let view = game_log.get_decision_view_for(p);
-
-                        // Show user the full built log + exactly what this agent is being sent (as requested).
-                        println!("=== FULL LOG (as being built, also written to log.txt) ===\n{}\n=== END FULL LOG ===", game_log.full_as_str());
-                        println!("=== PERSONALIZED VIEW SENT TO AGENT (player {}) attempt {} ===\n{}\n=== END SENT VIEW ===", p, attempts, view);
-
-                        let action = controllers[p].decide_action(&game, p, Some(&view));
-
-                        if let SevenWondersAction::Terminal(term) = action {
-                            let res = game.submit_terminal_action(p, term.clone());
-                            println!("Player {} result: {:?}", p, res);
-
-                            if matches!(res, ActionResult::Success { .. }) {
-                                let summary = format_action_summary_lines(&game, p, &term);
-                                game_log.close_current_decision(&summary);
-                                got_success = true;
-                                break;
-                            } else if let ActionResult::Invalid { reason, .. } = res {
-                                game_log.append_to_current_decision(&format_error_for_log(&reason));
-                            }
-                        } else {
-                            game_log.append_to_current_decision(
-                                "ERROR: Only play, wonder, and burn actions are allowed.\n",
-                            );
-                        }
+                loop {
+                    attempts += 1;
+                    if attempts > 3 {
+                        println!("[p{}] 3 attempts exhausted - forcing fallback burn", p);
+                        break;
                     }
 
-                    if !got_success {
-                        // Fallback burn after exhausting attempts (still record in log)
-                        if let Some(card) = game.players[p].current_hand.first().cloned() {
-                            let fb = TerminalAction::BurnCard { card_id: card.clone() };
-                            let _ = game.submit_terminal_action(p, fb.clone());
-                            let summary = format_action_summary_lines(&game, p, &fb);
+                    let view = game_log.get_decision_view_for(p);
+                    let action = controllers[p].decide_action(&game, p, Some(&view));
+
+                    if let SevenWondersAction::Terminal(term) = action {
+                        let res = game.submit_terminal_action(p, term.clone());
+                        println!("Player {} result: {:?}", p, res);
+
+                        if matches!(res, ActionResult::Success { .. }) {
+                            let summary = format_action_summary_lines(&game, p, &term);
                             game_log.close_current_decision(&summary);
+                            got_success = true;
+                            break;
+                        } else if let ActionResult::Invalid { reason, .. } = res {
+                            game_log.append_to_current_decision(&format_error_for_log(&reason));
                         }
+                    } else {
+                        game_log.append_to_current_decision(
+                            "ERROR: Only play, wonder, and burn actions are allowed.\n",
+                        );
                     }
-                } else {
-                    // === Non-log controllers (Auto FirstPurchaseable + Human): behavior unchanged ===
-                    // Autos still use direct engine is_valid + pick first playable. We just record their action as simple line.
-                    loop {
-                        let action = controllers[p].decide_action(&game, p, None);
-                        if let SevenWondersAction::Terminal(term) = action {
-                            let res = game.submit_terminal_action(p, term.clone());
-                            println!("Player {} result: {:?}", p, res);
-                            if matches!(res, ActionResult::Success { .. }) {
-                                let summary = format_action_summary_lines(&game, p, &term);
-                                game_log.append_simple_player_action(&summary);
-                                break;
-                            } else {
-                                // Re-ask (humans re-enter their menu loop on next decide call; autos should not hit invalid)
-                            }
+                }
+
+                if !got_success {
+                    if let Some(card) = game.players[p].current_hand.first().cloned() {
+                        let fb = TerminalAction::BurnCard { card_id: card.clone() };
+                        let _ = game.submit_terminal_action(p, fb.clone());
+                        let summary = format_action_summary_lines(&game, p, &fb);
+                        game_log.close_current_decision(&summary);
+                    }
+                }
+            } else {
+                loop {
+                    let action = controllers[p].decide_action(&game, p, None);
+                    if let SevenWondersAction::Terminal(term) = action {
+                        let res = game.submit_terminal_action(p, term.clone());
+                        println!("Player {} result: {:?}", p, res);
+                        if matches!(res, ActionResult::Success { .. }) {
+                            let summary = format_action_summary_lines(&game, p, &term);
+                            game_log.append_simple_player_action(&summary);
+                            break;
                         }
                     }
                 }
             }
-
-            total_rounds_played += 1;
-            rounds_this_age += 1;
-
-            // Round fully resolved inside the last player's submit.
-            // Now emit the public summary (visible to all subsequent decisions) and commit the round.
-            game_log.add_round_summary(round as u8);
-
-            // Extra visibility of the built log after the round (in addition to the per-decision prints).
-            println!("=== FULL LOG AFTER ROUND {} (committed for next round; also in log.txt) ===\n{}\n=== END ===", round, game_log.full_as_str());
         }
 
-        if rounds_this_age == 6 {
-            game.resolve_battles();
+        total_rounds_played += 1;
+        game_log.add_round_summary(round);
+
+        if game.current_age > age_before {
             game_log.close_age(&game.get_age_summary());
+            if !game.is_game_over() {
+                game_log.start_age(game.current_age);
+                println!("\n=== Age {} ===", game.current_age);
+            }
         }
     }
+
+    if game.is_game_over() {
+        if let Some(scores) = &game.final_scores {
+            println!("\n=== FINAL SCORES ===");
+            for (i, s) in scores.iter().enumerate() {
+                println!(
+                    "Player {}: {} VP (military +{}, defeats {}, treasury {}, wonders {}, civilian {}, science {}, guilds {}, commerce {})",
+                    i,
+                    s.total,
+                    s.military_victory,
+                    s.military_defeat,
+                    s.treasury,
+                    s.wonders,
+                    s.civilian,
+                    s.science,
+                    s.guilds,
+                    s.commerce
+                );
+            }
+        }
+    }
+
     game_log.write_to_disk();
 
     if max_rounds == 4 {
-        println!("\nDedicated smoke finished after 4 rounds. Full log in log.txt. Check console for the views that were sent to the LLM.");
+        println!("\nFinished after 4 rounds. Full log in log.txt.");
     } else if is_smoke {
-        println!("\nSmoke game finished after {} rounds (full scoring/battles stubbed for now).", max_rounds);
+        println!("\nSmoke game finished after {} rounds.", max_rounds);
+    } else if game.is_game_over() {
+        println!("\nGame finished.");
     } else {
-        println!("\nGame finished (full scoring/battles stubbed for now).");
+        println!("\nStopped after {} rounds.", max_rounds);
     }
 }
 
@@ -1091,6 +1244,71 @@ mod tests {
         } else {
             panic!("expected invalid for buying both from combo");
         }
+    }
+
+    #[test]
+    fn chain_building_allows_free_play_without_resources() {
+        let mut game = GameState::new(3);
+        game.players[0].board.played_cards = vec!["well".to_string()];
+        game.players[0].current_hand = vec!["statue".to_string()];
+        game.players[1].current_hand = vec!["lumber_yard".to_string()];
+        game.players[2].current_hand = vec!["ore_vein".to_string()];
+        let action = TerminalAction::PlayCard {
+            card_id: "statue".to_string(),
+            trades: vec![],
+        };
+        let _ = game.submit_terminal_action(1, TerminalAction::BurnCard {
+            card_id: "lumber_yard".to_string(),
+        });
+        let _ = game.submit_terminal_action(2, TerminalAction::BurnCard {
+            card_id: "ore_vein".to_string(),
+        });
+        let res = game.submit_terminal_action(0, action);
+        assert!(matches!(res, ActionResult::Success { .. }), "chained statue should be free: {:?}", res);
+    }
+
+    #[test]
+    fn end_of_age_discard_removes_last_card() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["lumber_yard".to_string()];
+        game.discard_end_of_age_cards();
+        assert!(game.players[0].current_hand.is_empty());
+        game.players[1].current_hand = vec!["a".to_string(), "b".to_string()];
+        game.discard_end_of_age_cards();
+        assert_eq!(game.players[1].current_hand.len(), 2);
+    }
+
+    #[test]
+    fn military_battle_assigns_victory_and_defeat() {
+        let mut game = GameState::new(3);
+        game.players[0].board.played_cards = vec!["stockade".to_string()];
+        game.players[1].board.played_cards = vec![];
+        game.players[2].board.played_cards = vec!["barracks".to_string(), "guard_tower".to_string()];
+        game.resolve_battles();
+        assert!(game.players[0].board.military_victory_vp > 0);
+        assert!(game.players[1].board.defeat_tokens > 0);
+        assert_eq!(game.last_age_battle_deltas[0].0, -1); // lost to left neighbor's stronger army
+        assert_eq!(game.last_age_battle_deltas[0].1, 1);  // beat right neighbor
+    }
+
+    #[test]
+    fn science_card_adds_symbol_on_play() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["workshop".to_string()];
+        game.players[0].board.played_cards = vec!["glassworks".to_string()];
+        game.players[1].current_hand = vec!["lumber_yard".to_string()];
+        game.players[2].current_hand = vec!["ore_vein".to_string()];
+        let _ = game.submit_terminal_action(1, TerminalAction::BurnCard {
+            card_id: "lumber_yard".to_string(),
+        });
+        let _ = game.submit_terminal_action(2, TerminalAction::BurnCard {
+            card_id: "ore_vein".to_string(),
+        });
+        let _ = game.submit_terminal_action(0, TerminalAction::PlayCard {
+            card_id: "workshop".to_string(),
+            trades: vec![],
+        });
+        assert!(game.players[0].board.science_symbols.contains(&"compass".to_string()));
     }
 
     #[test]

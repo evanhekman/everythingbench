@@ -2,46 +2,83 @@ use crate::config::validate_model;
 use crate::games::bullshit_dict::BullshitDict;
 use crate::models::xai::XaiClient;
 use crate::results::{RunConfig, RunResult, Summary, TrialResult};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::Utc;
 use std::fs;
+
+/// Run Seven Wonders with per-seat player types.
+///
+/// Each spec is one of:
+/// - `human-agent` — full agent context (agent.txt + cards + user.txt + log), terminal input
+/// - `human` — minimal context (user.txt + log only), terminal input
+/// - `auto` — first playable card in hand (no trades), else burn
+/// - `<model-name>` — LLM agent via API (e.g. grok-4.3)
+pub fn run_seven_wonders(
+    player_count: u8,
+    player_specs: &[String],
+    max_rounds: Option<u32>,
+) -> Result<()> {
+    if player_specs.len() != player_count as usize {
+        bail!(
+            "Expected {} player specs (one per seat), got {}. \
+             Example: seven-wonders 3 auto human grok-4.3",
+            player_count,
+            player_specs.len()
+        );
+    }
+
+    use crate::games::seven_wonders::{
+        controller::PlayerController, FirstPurchaseableController, HumanLogController, LLMController,
+        run_game, run_limited_rounds_game,
+    };
+
+    let mut controllers: Vec<Box<dyn PlayerController>> = Vec::with_capacity(player_count as usize);
+
+    for (i, spec) in player_specs.iter().enumerate() {
+        let kind = spec.to_lowercase();
+        let controller: Box<dyn PlayerController> = match kind.as_str() {
+            "auto" => Box::new(FirstPurchaseableController),
+            "human-agent" => Box::new(HumanLogController::as_agent(format!("player {}", i))),
+            "human" => Box::new(HumanLogController::as_human(format!("player {}", i))),
+            model => {
+                validate_model(model)?;
+                Box::new(LLMController::new(model.to_string()))
+            }
+        };
+        controllers.push(controller);
+    }
+
+    println!("Starting Seven Wonders ({} players):", player_count);
+    for (i, spec) in player_specs.iter().enumerate() {
+        println!("  Player {}: {}", i, spec);
+    }
+
+    match max_rounds {
+        Some(n) => run_limited_rounds_game(controllers, n),
+        None => run_game(controllers),
+    }
+
+    Ok(())
+}
 
 pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> {
     validate_model(model)?;
 
-    if benchmark == "seven-wonders" {
-        // Normal / interactive mode: 2 humans + 1 LLM with the given model, full game.
-        println!("Starting Seven Wonders with 2 humans + 1 AI ({})", model);
-        use crate::games::seven_wonders::{controller::PlayerController, HumanController, LLMController, run_game};
-        let controllers: Vec<Box<dyn PlayerController>> = vec![
-            Box::new(HumanController::new("Human1".to_string())),
-            Box::new(HumanController::new("Human2".to_string())),
-            Box::new(LLMController::new(model.to_string())),
-        ];
-        run_game(controllers);
-        return Ok(());
-    }
-
-    if benchmark == "seven-wonders-smoke" {
-        // Dedicated smoke test (per spec):
-        // - 4 rounds total (via run_limited_rounds_game)
-        // - Only the middle controller (player 1) is LLM using the given model; it receives the personalized log view each turn.
-        // - Players 0 and 2 are FirstPurchaseableController (auto: first valid play with 0 trades). Their behavior is unchanged.
-        // - The engine builds a single log.txt (full, with private decision blocks) + prints the exact views sent to the agent.
-        // - Up to 3 retries + ERROR injection for the LLM on invalid actions.
-        println!("Starting dedicated Seven Wonders smoke test (4 rounds): log-based LLM only for player 1; autos for 0+2 (unchanged)");
-        use crate::games::seven_wonders::{controller::PlayerController, LLMController, FirstPurchaseableController, run_limited_rounds_game};
-        let controllers: Vec<Box<dyn PlayerController>> = vec![
-            Box::new(FirstPurchaseableController),           // player 0 auto
-            Box::new(LLMController::new(model.to_string())), // player 1 = grok (gets log)
-            Box::new(FirstPurchaseableController),           // player 2 auto
-        ];
-        run_limited_rounds_game(controllers, 4);
-        return Ok(());
+    if benchmark.starts_with("seven-wonders") {
+        bail!(
+            "Use the seven-wonders subcommand instead.\n\
+             Example: cargo run -- seven-wonders 3 auto human {}\n\
+             Or:      just run seven-wonders 3 auto human {}",
+            model, model
+        );
     }
 
     if benchmark != "bullshit-dict" {
-        anyhow::bail!("Only 'bullshit-dict' and 'seven-wonders' benchmarks are implemented");
+        anyhow::bail!(
+            "Unknown benchmark '{}'. Implemented: bullshit-dict. \
+             For Seven Wonders use: cargo run -- seven-wonders <N> <player-specs...>",
+            benchmark
+        );
     }
 
     println!("Loading bullshit-dict game...");

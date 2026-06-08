@@ -129,6 +129,9 @@ fn parse_effect(v: &serde_json::Value) -> Effect {
         if let Some(coins) = obj.get("coins").and_then(|x| x.as_i64()) {
             return Effect::Coins(coins as i32);
         }
+        if let Some(mil) = obj.get("military").and_then(|x| x.as_i64()) {
+            return Effect::Military(mil as i32);
+        }
         if !obj.is_empty() {
             return Effect::Other(v.clone());
         }
