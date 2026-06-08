@@ -1,29 +1,31 @@
-//! GameLog: single canonical XML log for transparency + personalized views for agents.
+//! GameLog: single canonical plain-text log for transparency + personalized views for agents.
 //!
-//! - full: always contains every <decision> with full private info (for the deciding player at the time).
-//! - For decision views supplied to an agent: only up to the end of the previous round (committed),
-//!   plus the *current* open <decision> block for that player (no same-round actions from others).
-//! - Autos and post-round actions are recorded as simple action lines (never private <decision>).
-//! - After each round completes, summaries + all round actions are committed so future decisions see them.
+//! - full: always contains every decision block with full private info (for the deciding player at the time).
+//! - For decision views supplied to an agent: only completed prior rounds (summaries + age summaries),
+//!   plus the *current* open decision block for that player (no same-round actions from others).
+//! - Autos and post-round actions are recorded as simple action lines (never private decision blocks).
+//! - After each round completes, summaries are committed so future decisions see them.
 //! - Always writes the full log to log.txt on disk for easy `cat log.txt` / `tail -f`.
 
 use std::fs;
 
 pub struct GameLog {
-    /// The complete unredacted log (with all private <decision> blocks as they were built).
+    /// The complete unredacted log (with all private decision blocks as they were built).
     /// This is what gets written to log.txt.
     pub full: String,
-    /// Safe prefix containing only complete prior rounds (with their public actions + summaries).
-    /// Decision views for agents are built from this + the current open decision (if any).
+    /// Safe prefix containing only complete prior rounds (public summaries + age headers/summaries).
+    /// Decision views for agents are built from this + the current open round header + open decision.
     committed: String,
-    /// Current open age tag (e.g. "1")
+    /// Current age (e.g. 1)
     current_age: Option<u8>,
-    /// Current open round tag (e.g. "1")
+    /// Current round within the age (e.g. 1)
     current_round: Option<u8>,
     /// If a decision is open for a player, which one (0-based).
     current_decision_player: Option<usize>,
-    /// Accumulating content inside the current <decision> (private info + attempt errors + neighbors on 2nd prompt).
+    /// Accumulating content inside the current decision (private info + error messages).
     current_decision_text: String,
+    /// Action lines collected during the current round (for the round summary).
+    current_round_actions: Vec<String>,
 }
 
 impl GameLog {
@@ -35,116 +37,109 @@ impl GameLog {
             current_round: None,
             current_decision_player: None,
             current_decision_text: String::new(),
+            current_round_actions: Vec::new(),
         }
     }
 
     /// Call when a new age begins (before its rounds).
     pub fn start_age(&mut self, age: u8) {
-        if let Some(prev) = self.current_age {
-            // close previous if open (shouldn't normally happen)
-            self.full.push_str(&format!("</age_{}>\n", prev));
-        }
-        self.full.push_str(&format!("<age_{}>\n", age));
+        let header = format!("=== AGE {} ===\n\n", age);
+        self.full.push_str(&header);
+        self.committed.push_str(&header);
         self.current_age = Some(age);
         self.write_to_disk();
     }
 
     /// Call at the beginning of each round (before players decide).
     pub fn start_round(&mut self, round: u8) {
-        if let Some(prev) = self.current_round {
-            // shouldn't happen
-            self.full.push_str(&format!("</round_{}>\n", prev));
-        }
-        self.full.push_str(&format!("<round_{}>\n", round));
         self.current_round = Some(round);
+        self.current_round_actions.clear();
+        let header = format!("--- Round {} ---\n", round);
+        self.full.push_str(&header);
         self.write_to_disk();
     }
 
-    /// Begin a rich decision block for a log-using player (LLM). Private info goes here.
-    /// The view passed to the agent will be committed + this open block.
-    /// Does not yet appear in committed.
+    /// Begin a decision block for a log-using player (LLM). Private info goes here.
     pub fn begin_player_decision(&mut self, player: usize, private_info: String) {
         self.current_decision_player = Some(player);
         self.current_decision_text = private_info;
-        // Do not append to full yet; we append the closed version on close_current_decision.
-        // This keeps "as it is being built" visible only after close (or we can append an open version if desired).
     }
 
-    /// Append more text inside the open <decision> (e.g. "Attempt 1: ... Error: ...", neighbors info, etc.).
-    /// This will be visible in the full log and in re-try views for this same player.
+    /// Append text inside the open decision (e.g. ERROR messages on retry).
     pub fn append_to_current_decision(&mut self, text: &str) {
         if self.current_decision_player.is_some() {
             self.current_decision_text.push_str(text);
-            // For live visibility of the building decision, we can append a snapshot to full (as a comment or progressive).
-            // But to keep XML clean, we only write the final closed block. User sees progress via console prints instead.
         }
     }
 
-    /// Close the current player's <decision>, append the full private block (with outcome) to the full log.
-    /// The outcome_line is usually "player_N played xxx" or "player_N built wonder stage S" or "player_N burned yyy".
-    pub fn close_current_decision(&mut self, outcome_line: &str) {
-        if let Some(player) = self.current_decision_player {
-            self.current_decision_text.push_str(&format!("\n{}\n", outcome_line));
-            let block = format!(
-                "<player_{}>\n<decision>\n{}\n</decision>\n</player_{}>\n",
-                player, self.current_decision_text, player
-            );
+    /// Record action lines for the round summary and close the current decision block in the full log.
+    pub fn close_current_decision(&mut self, summary_lines: &[String]) {
+        if self.current_decision_player.is_some() {
+            let block = format!("--- Your Turn ---\n{}\n", self.current_decision_text);
             self.full.push_str(&block);
+            self.current_round_actions.extend(summary_lines.iter().cloned());
             self.current_decision_player = None;
             self.current_decision_text.clear();
             self.write_to_disk();
         }
     }
 
-    /// For autos (and any non-log decider): record a simple action line (no private decision wrapper).
-    /// These are visible in full immediately (for transparency) but *not* shown to agents in same-round decision views.
-    pub fn append_simple_player_action(&mut self, player: usize, action_line: &str) {
-        let block = format!("<player_{}>\n{}\n</player_{}>\n", player, action_line, player);
-        self.full.push_str(&block);
+    /// For autos (and any non-log decider): record action lines for the round summary.
+    /// Also appends them to the full log immediately.
+    pub fn append_simple_player_action(&mut self, summary_lines: &[String]) {
+        for line in summary_lines {
+            self.full.push_str(line);
+            self.full.push('\n');
+            self.current_round_actions.push(line.clone());
+        }
         self.write_to_disk();
     }
 
-    /// Add the public <summary> for the just-completed round, close the round tag,
-    /// then commit everything so far so the *next* round's decisions can see prior actions + this summary.
-    pub fn add_round_summary(&mut self, summary_text: &str) {
-        if let Some(round) = self.current_round {
-            self.full.push_str(&format!("<summary>\n{}\n</summary>\n", summary_text));
-            self.full.push_str(&format!("</round_{}>\n", round));
-            self.current_round = None;
-            // Now this round (its player actions + summary) is complete and safe to show future decisions.
-            self.committed = self.full.clone();
-            self.write_to_disk();
+    /// Add the public round summary, then commit everything so far.
+    pub fn add_round_summary(&mut self, round: u8) {
+        let mut summary = format!("Round {} Summary:\n", round);
+        for line in &self.current_round_actions {
+            summary.push_str(line);
+            summary.push('\n');
         }
+        summary.push('\n');
+        self.full.push_str(&summary);
+        self.committed.push_str(&summary);
+        self.current_round = None;
+        self.current_round_actions.clear();
+        self.write_to_disk();
     }
 
-    /// Close any open age (at end of game or age change).
-    pub fn close_age(&mut self) {
+    /// Close the current age with an end-of-age summary block.
+    pub fn close_age(&mut self, summary_text: &str) {
         if let Some(age) = self.current_age {
-            self.full.push_str(&format!("</age_{}>\n", age));
+            let block = format!("--- Age {} Summary ---\n{}\n\n", age, summary_text);
+            self.full.push_str(&block);
+            self.committed.push_str(&block);
             self.current_age = None;
-            self.committed = self.full.clone();
             self.write_to_disk();
         }
     }
 
-    /// Build the string to supply as context for a deciding player.
-    /// This is the "personalized" view: only prior complete rounds + (if this player has an open decision) the open <player_N><decision>private...</decision> (left open).
-    /// No same-round actions from other players, even if they have already been recorded in .full.
+    /// Build the personalized string to supply as context for a deciding player.
+    /// Prior complete rounds + current round header + open decision block (with "(you)" markers).
     pub fn get_decision_view_for(&self, player: usize) -> String {
-        let mut view = self.committed.clone();
+        let mut view = personalize_for_player(&self.committed, player);
+        if let Some(round) = self.current_round {
+            view.push_str(&format!("--- Round {} ---\n", round));
+        }
         if self.current_decision_player == Some(player) {
-            if !view.ends_with('\n') {
+            view.push_str("--- Your Turn ---\n");
+            view.push_str(&self.current_decision_text);
+            if !self.current_decision_text.ends_with('\n') {
                 view.push('\n');
             }
-            view.push_str(&format!("<player_{}>\n<decision>\n{}\n", player, self.current_decision_text));
-            // deliberately leave </decision> and </player> off so the model "completes" the decision
         }
         view
     }
 
     /// Write the full log to disk (log.txt in cwd). Safe to call often; overwrites.
     pub fn write_to_disk(&self) {
-        // Best-effort; ignore errors so game doesn't crash on fs issues.
         let _ = fs::write("log.txt", &self.full);
     }
 
@@ -154,8 +149,65 @@ impl GameLog {
     }
 }
 
+/// Replace "Player N" with "Player N (you)" for the viewing player.
+fn personalize_for_player(text: &str, player: usize) -> String {
+    let marker = format!("Player {} ", player);
+    let you_marker = format!("Player {} (you) ", player);
+    text.replace(&marker, &you_marker)
+}
+
 impl Default for GameLog {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GameLog;
+
+    #[test]
+    fn plain_text_log_format_matches_agent_spec() {
+        let mut log = GameLog::new();
+        log.start_age(1);
+        log.start_round(1);
+        log.begin_player_decision(
+            1,
+            "hand: [marketplace, baths]\ncoins: 3\nwonder_stages_built: 0\n\
+your_production: []\nleft (Player 0) production: []\nright (Player 2) production: []\n"
+                .to_string(),
+        );
+        log.append_simple_player_action(&["Player 0 played ore_vein".to_string()]);
+        log.close_current_decision(&["Player 1 played marketplace".to_string()]);
+        log.append_simple_player_action(&["Player 2 played glassworks".to_string()]);
+        log.add_round_summary(1);
+
+        let view = log.get_decision_view_for(1);
+        assert!(view.contains("=== AGE 1 ==="));
+        assert!(view.contains("Round 1 Summary:"));
+        assert!(view.contains("Player 1 (you) played marketplace"));
+        assert!(!view.contains("<round"));
+        assert!(!view.contains("<decision"));
+
+        log.start_round(2);
+        log.begin_player_decision(
+            1,
+            "hand: [apothecary]\ncoins: 3\nwonder_stages_built: 0\n\
+your_production: []\nleft (Player 0) production: [ore]\nright (Player 2) production: [glass]\n"
+                .to_string(),
+        );
+        let turn_view = log.get_decision_view_for(1);
+        assert!(turn_view.contains("--- Round 2 ---"));
+        assert!(turn_view.contains("--- Your Turn ---"));
+        assert!(turn_view.contains("hand: [apothecary]"));
+        assert!(!turn_view.contains("--- Round 1 ---"));
+    }
+
+    #[test]
+    fn personalize_marks_viewing_player_as_you() {
+        let text = "Round 1 Summary:\nPlayer 0 played ore_vein\nPlayer 1 played marketplace\n";
+        let view = super::personalize_for_player(text, 1);
+        assert!(view.contains("Player 1 (you) played marketplace"));
+        assert!(view.contains("Player 0 played ore_vein"));
     }
 }

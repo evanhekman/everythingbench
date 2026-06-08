@@ -1,0 +1,19 @@
+=== AGE 1 ===
+
+--- Round 1 ---
+Player 0 played ore_vein
+--- Your Turn ---
+hand: [marketplace, baths]
+coins: 3
+wonder_stages_built: 0
+your_production: []
+left (Player 0) production: []
+right (Player 2) production: []
+
+Player 2 played glassworks
+Round 1 Summary:
+Player 0 played ore_vein
+Player 1 played marketplace
+Player 2 played glassworks
+
+--- Round 2 ---

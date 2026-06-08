@@ -1,0 +1,93 @@
+# SEVEN WONDERS CARD LIST (4 players)
+#
+# Generated from cards.txt. Copy counts are exact for this player count.
+# Guilds: 6 of the 10 guilds below are included each game.
+#
+Format:
+Card Name (card_id) | Color | Cost | Benefit | Chains | Copies
+
+### AGE 1
+Lumber Yard (lumber_yard) | Brown | Free | +1 wood | None | 2
+Ore Vein (ore_vein) | Brown | Free | +1 ore | None | 2
+Stone Pit (stone_pit) | Brown | Free | +1 stone | None | 1
+Clay Pool (clay_pool) | Brown | Free | +1 brick | None | 1
+Clay Pit (clay_pit) | Brown | 1 coin | +1 ore or +1 brick | None | 1
+Timber Yard (timber_yard) | Brown | 1 coin | +1 wood or +1 stone each turn | None | 1
+Excavation (excavation) | Brown | 1 coin | +1 stone or +1 brick each turn | None | 1
+Glassworks (glassworks) | Gray | Free | +1 glass | None | 1
+Press (press) | Gray | Free | +1 paper | None | 1
+Loom (loom) | Gray | Free | +1 cloth | None | 1
+Well (well) | Blue | Free | +3 points | to statue | 1
+Altar (altar) | Blue | Free | +3 points | to pantheon | 1
+Theater (theater) | Blue | Free | +3 points | to gardens | 1
+Baths (baths) | Blue | [stone] | +3 points | to aqueduct | 1
+Tavern (tavern) | Yellow | Free | +5 coins | None | 1
+Marketplace (marketplace) | Yellow | Free | buy [paper, glass, cloth] from either neighbor for 1 coin instead of 2 | to caravansery | 1
+West Trading Post (west_trading_post) | Yellow | Free | buy [wood, stone, brick, ore] from left_neighbor for 1 coin instead of 2 | to forum | 1
+East Trading Post (east_trading_post) | Yellow | Free | buy [wood, stone, brick, ore] from right_neighbor for 1 coin instead of 2 | to forum | 1
+Guard Tower (guard_tower) | Red | [brick] | +1 military | None | 2
+Barracks (barracks) | Red | [ore] | +1 military | None | 1
+Stockade (stockade) | Red | [wood] | +1 military | None | 1
+Scriptorium (scriptorium) | Green | [paper] | +1 tablet | to courthouse, to library | 2
+Apothecary (apothecary) | Green | [cloth] | +1 compass | to stables, to dispensary | 1
+Workshop (workshop) | Green | [glass] | +1 cog | to archery_range, to laboratory | 1
+
+### AGE 2
+Sawmill (sawmill) | Brown | 1 coin | +2 wood | None | 2
+Quarry (quarry) | Brown | 1 coin | +2 stone | None | 2
+Brickyard (brickyard) | Brown | 1 coin | +2 brick | None | 2
+Foundry (foundry) | Brown | 1 coin | +2 ore | None | 2
+Glassworks (glassworks) | Gray | Free | +1 glass | None | 1
+Press (press) | Gray | Free | +1 paper | None | 1
+Loom (loom) | Gray | Free | +1 cloth | None | 1
+Statue (statue) | Blue | [ore, ore, wood] | +4 points | from well | 1
+Aqueduct (aqueduct) | Blue | [stone, stone, stone] | +5 points | from baths | 1
+Courthouse (courthouse) | Blue | [brick, brick, cloth] | +4 points | from scriptorium | 1
+Temple (temple) | Blue | [wood, brick, glass] | +4 points | None | 1
+Caravansery (caravansery) | Yellow | [wood, wood] | +1 wood or +1 stone or +1 brick or +1 ore each turn | from marketplace, to lighthouse | 1
+Forum (forum) | Yellow | [brick, brick] | +1 glass or +1 paper or +1 cloth each turn | from east_trading_post, from west_trading_post, to haven | 1
+Vineyard (vineyard) | Yellow | Free | +1 coin for all of your and your neighbors' brown cards | None | 1
+Bazaar (bazaar) | Yellow | Free | +2 coins for all of your and your neighbor's gray cards | None | 1
+Stables (stables) | Red | [wood, ore, brick] | +2 military | from apothecary | 1
+Archery Range (archery_range) | Red | [wood, wood, ore] | +2 military | from workshop | 1
+Walls (walls) | Red | [stone, stone, stone] | +2 military | to fortifications | 1
+Training Ground (training_ground) | Red | [ore, ore, wood] | +2 military | to circus | 1
+Dispensary (dispensary) | Green | [ore, ore, glass] | +1 compass | from apothecary, to arena, to lodge | 2
+Laboratory (laboratory) | Green | [brick, brick, paper] | +1 cog | from workshop, to siege_workshop, to lodge | 1
+Library (library) | Green | [stone, stone, cloth] | +1 tablet | from scriptorium, to senate, to university | 1
+School (school) | Green | [wood, paper] | +1 tablet | to academy, to study | 1
+
+### AGE 3
+Pantheon (pantheon) | Blue | [brick, brick, ore, glass, paper, cloth] | +7 points | from altar | 1
+Gardens (gardens) | Blue | [brick, brick, wood] | +5 points | from theater | 2
+Senate (senate) | Blue | [wood, wood, stone, ore] | +6 points | from university | 1
+Town Hall (town_hall) | Blue | [stone, stone, stone, glass] | +6 points | None | 1
+Palace (palace) | Blue | [wood, stone, ore, brick, glass, paper, cloth] | +8 points | None | 1
+Lighthouse (lighthouse) | Yellow | [stone, glass] | +1 coin and +1 point for each yellow card you have | from caravansery | 1
+Haven (haven) | Yellow | [wood, ore, cloth] | +1 coin and +1 point for each brown card you have | from forum | 2
+Chamber of Commerce (chamber_of_commerce) | Yellow | [brick, brick, paper] | +2 coins and +12 points for each gray card you have | None | 1
+Arena (arena) | Yellow | [brick, brick, ore] | +3 coins and +1 point for each wonder stage card you have built | from dispensary | 1
+Castrum (castrum) | Red | [brick, brick, wood, paper] | +3 military | None | 1
+Fortifications (fortifications) | Red | [ore, ore, ore, brick] | +3 military | from walls | 1
+Circus (circus) | Red | [brick, brick, brick, ore] | +3 military | from training_ground | 1
+Arsenal (arsenal) | Red | [wood, wood, ore, cloth] | +3 military | None | 1
+Siege Workshop (siege_workshop) | Red | [brick, brick, brick, wood] | +3 military | from laboratory | 1
+Lodge (lodge) | Green | [brick, brick, paper, cloth] | +1 compass | from dispensary, from laboratory | 1
+Academy (academy) | Green | [stone, stone, stone, glass] | +1 compass | from school | 1
+Observatory (observatory) | Green | [ore, ore, glass, cloth] | +1 cog | from laboratory | 1
+Study (study) | Green | [wood, paper, cloth] | +1 cog | from school | 1
+University (university) | Green | [wood, wood, glass, paper] | +1 tablet | from library | 2
+
+### GUILDS
+There are 10 guilds; 6 are included in each game.
+
+Worker's Guild (workers_guild) | Purple | [ore, ore, wood, stone, brick] | +1 point for all of each neighbors' brown cards | None | 1
+Craftsmen's Guild (craftsmens_guild) | Purple | [stone, stone, ore] | +2 points for all of each neighbors' gray cards | None | 1
+Magistrate's Guild (magistrates_guild) | Purple | [wood, wood, wood, stone, cloth] | +1 point for all of each neighbor's blue cards | None | 1
+Trader's Guild (traders_guild) | Purple | [paper, glass, cloth] | +1 point for all of each neighbor's yellow cards | None | 1
+Spies Guild (spies_guild) | Purple | [brick, brick, glass] | +1 point for all of each neighbor's red cards | None | 1
+Philosopher's Guild (philosophers_guild) | Purple | [brick, brick, brick, paper, cloth] | +1 point for all of each neighbor's green cards | None | 1
+Scientist's Guild (scientists_guild) | Purple | [wood, wood, ore, ore, paper] | +1 compass or +1 cog or +1 tablet | None | 1
+Shipowner's Guild (shipowners_guild) | Purple | [wood, wood, wood, glass, paper] | +1 point for each of your brown, gray, and purple cards | None | 1
+Builder's Guild (builders_guild) | Purple | [stone, stone, stone, brick, brick, glass] | +1 point for each completed stage of your wonder and each of your neighbors' | None | 1
+Decorator's Guild (decorators_guild) | Purple | [ore, ore, stone, cloth] | +7 points if all stages of your wonder are completed | None | 1

@@ -16,14 +16,14 @@ fn load_prompt_file(name: &str) -> String {
 
 pub trait PlayerController {
     /// Whether this controller wants a rich log context string (instead of / in addition to raw GameState).
-    /// LLM controllers return true so the runner supplies the personalized XML log view.
+    /// LLM controllers return true so the runner supplies the personalized plain-text log view.
     /// Autos and humans return false and continue to drive directly from GameState (autos unchanged per spec).
     fn prefers_log_context(&self) -> bool {
         false
     }
 
     /// Run the decision loop for the player.
-    /// `log_view`: when Some, this is the (personalized) log prefix + open <decision> block for this player.
+    /// `log_view`: when Some, this is the (personalized) log prefix + open decision block for this player.
     ///   Only LLM impls use it as their prompt content. Others may ignore it.
     /// Returns the chosen terminal action (or observe for humans).
     fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction;
@@ -122,8 +122,8 @@ impl PlayerController for HumanController {
 }
 
 /// LLM controller using the xAI API.
-/// Now uses the rich personalized XML log (when the runner supplies log_view) as its entire context.
-/// The log contains history + the open <decision> block with this player's private hand/coins/neighbors.
+/// Now uses the rich personalized plain-text log (when the runner supplies log_view) as its entire context.
+/// The log contains history + the open decision block with this player's private hand/coins/neighbors.
 /// Always outputs exactly one of the 3 terminating actions (play/wonder/burn, with trades specified via repeated dir:res tokens).
 pub struct LLMController {
     pub model: String,
@@ -200,7 +200,7 @@ impl PlayerController for LLMController {
         let user_txt = load_prompt_file("user.txt");
 
         let user_prompt = if let Some(view) = log_view {
-            // The view contains the open <decision> block with private info + any retry/afford guidance.
+            // The view contains the open decision block with private info + any retry errors.
             // Prepend the static agent instructions, cards reference, and user placeholder.
             format!(
                 "{}\n\n{}\n\n{}\n\nCurrent log context for your decision (player {}):\n{}\n\nOutput exactly one action line:",

@@ -79,7 +79,7 @@ The log only shows completed previous rounds + your current private decision blo
 
 Battles are resolved only at the end of each full age (after round 6), not after individual rounds.
 
-When it is your turn, the log will end with your open decision block (starting with "--- Player X decision ---"). That block contains your private state. Output exactly one line with your action.
+When it is your turn, the log will end with your open decision block (starting with "--- Your Turn ---"). That block contains your private state. Output exactly one line with your action.
 
 Error messages are injected directly into the decision block (e.g. "ERROR: Insufficient stone. Neighbors currently produce: ..."). Read them and correct your next output. You get up to 3 attempts per decision.
 

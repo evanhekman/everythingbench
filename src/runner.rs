@@ -28,7 +28,7 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
         // - Only the middle controller (player 1) is LLM using the given model; it receives the personalized log view each turn.
         // - Players 0 and 2 are FirstPurchaseableController (auto: first valid play with 0 trades). Their behavior is unchanged.
         // - The engine builds a single log.txt (full, with private decision blocks) + prints the exact views sent to the agent.
-        // - Up to 3 retries + error injection for the LLM; special neighbors second prompt on first unaffordable attempt.
+        // - Up to 3 retries + ERROR injection for the LLM on invalid actions.
         println!("Starting dedicated Seven Wonders smoke test (4 rounds): log-based LLM only for player 1; autos for 0+2 (unchanged)");
         use crate::games::seven_wonders::{controller::PlayerController, LLMController, FirstPurchaseableController, run_limited_rounds_game};
         let controllers: Vec<Box<dyn PlayerController>> = vec![

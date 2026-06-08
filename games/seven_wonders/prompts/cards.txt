@@ -82,6 +82,10 @@ Academy (academy) | Green | [stone, stone, stone, glass] | +1 compass | from sch
 Observatory (observatory) | Green | [ore, ore, glass, cloth] | +1 cog | from laboratory | [3, 7]
 Study (study) | Green | [wood, paper, cloth] | +1 cog | from school | [3, 5]
 University (university) | Green | [wood, wood, glass, paper] | +1 tablet | from library | [3, 4]
+
+### GUILDS
+There are 10 guilds, but only (number_of_players + 2) will be included for any given game.
+
 Worker's Guild (workers_guild) | Purple | [ore, ore, wood, stone, brick] | +1 point for all of each neighbors' brown cards | None | []
 Craftsmen's Guild (craftsmens_guild) | Purple | [stone, stone, ore] | +2 points for all of each neighbors' gray cards | None | []
 Magistrate's Guild (magistrates_guild) | Purple | [wood, wood, wood, stone, cloth] | +1 point for all of each neighbor's blue cards | None | []
