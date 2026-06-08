@@ -16,12 +16,12 @@ right (Player 2) production: []
 
 (If this is a retry after an invalid move, the error + updated neighbor production will be inserted here.)
 
-Please select your action for this round (play, burn, wonder):
-> agent: play marketplace
+(Here you will be asked to select a move)
+Example: play marketplace
 
-Round Summary:
-Player 0 (you) played marketplace
-Player 1 played ore_vein
+Round 1 Summary:
+Player 0 played ore_vein
+Player 1 (you) played marketplace
 Player 2 played glassworks
 
 --- Round 2 ---
@@ -33,41 +33,41 @@ your_production: []
 left (Player 0) production: [ore]
 right (Player 2) production: [glass]
 
-Please select your action for this round (play, burn, wonder):
-> agent: play apothecary right:glass
+(Here you will be asked to select a move)
+Example: play apothecary right:glass
 
-Round Summary:
-Player 0 (you) bought glass from player 2
-Player 0 (you) played apothecary
-Player 1 played brickyard
-Player 2 played glassworks
+Round 2 Summary:
+Player 0 played brickyard
+Player 1 (you) bought glass from player 2
+Player 1 (you) played apothecary
+Player 2 played excavation
 
 --- Round 3 ---
 --- Your Turn ---
 hand: [scriptorium, east_trading_post, ...]
-coins: 3
+coins: 2
 wonder_stages_built: 0
 your_production: []
 left (Player 0) production: [ore, brick]
-right (Player 2) production: [glass]
+right (Player 2) production: [glass, ore/brick]
 
 Please select your action for this round (play, burn, wonder):
-> agent: play east_trading_post
+Example: play east_trading_post
 
-Round Summary:
-Player 0 (you) played east_trading_post
-Player 1 played loom
+Round 3 Summary:
+Player 0 played loom
+Player 1 (you) played east_trading_post
 Player 2 played west_trading_post
 
 ...
 
---- Age Summary ---
-Player 0 (you) built 0 wonder stages
-Player 1 built 0 wonder stages
+--- Age 1 Summary ---
+Player 0 built 0 wonder stages
+Player 1 (you) built 0 wonder stages
 Player 2 built 0 wonder stages
 
-Player 0 (you) gets +1, +1 from battles
-Player 1 gets +1, -1 from battles
+Player 0 gets +1, -1 from battles
+Player 1 (you) gets +1, +1 from battles
 Player 2 gets -1, -1 from battles
 
 === AGE 2 ===
