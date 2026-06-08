@@ -1,5 +1,5 @@
 # AGENT INSTRUCTIONS
-Here is an example of how you will interact with the game. You will be providing with sections of a log documenting the game, and will be asked to make at least one decision each turn. If your action requires supporing actions (i.e. buying resources from a neighbor), you should specify them before the action. If the action is automatic (i.e. a card is built for free) you do not need to specify it. If you attempt to perform an invalid action, you will receive an error from the engine and will be asked to try again.
+Here is an example of how you will interact with the game. You will be provided with sections of a log documenting the game, and will be asked to make at least one decision each turn. If your action requires supporting actions (i.e. buying resources from a neighbor), you should specify them before the action. If the action is automatic (i.e. a card is built for free) you do not need to specify it. If you attempt to perform an invalid action, you will receive an error from the engine and will be asked to try again.
 
 This is the structure of the log you will receive in increments:
 ```
@@ -21,8 +21,8 @@ This is the structure of the log you will receive in increments:
     </round_M>
     ...
     <summary>
-        player_1 has <n> points, <n> coins, <n> milirary
-        player_2 has <n> points, <n> coins, <n> milirary
+        player_1 has <n> points, <n> coins, <n> military
+        player_2 has <n> points, <n> coins, <n> military
         ...
         player_1 receives -1 from battles
         player_2 receives +3 from battles
@@ -33,31 +33,25 @@ This is the structure of the log you will receive in increments:
 
 An error message might look something like this:
 ```
-ERROR: Insufficient resources to perform this action. Please select a different action or purchase from neighbors.
+ERROR: Insufficient resources to perform this action. Please select a different action or specify trades using left:resource / right:resource.
 ```
 
 YOUR AVAILABLE ACTIONS:
-play <card>
-wonder <card>
-burn <card>
-IF YOU NEED TO PURCHASE A RESOURCE TO BUILD SOMETHING, PUT THIS FIRST
-purchase <resource> (left|right)_neighbor
+play <card_id> [left:<resource> right:<resource> ...]
+wonder <card_id> [left:<resource> right:<resource> ...]
+burn <card_id>
 
-Purchasing from neighbors requires having enough coins. An example purchase might look like this:
+Use the dir:resource notation for trades (only when needed). Repeat the token for multiples (e.g. left:stone left:stone). You can only buy resources your neighbors are producing. Example:
 ```
-purchase wood left_neighbor
-build baths
+play baths left:stone
 ```
 
-A more complex example might look like this:
+A more complex example:
 ```
-purchase stone left_neighbor
-purchase stone right_neighbor
-purchase stone right_neighbor
-build walls
+play walls left:stone left:stone right:ore
 ```
 
-To play a wonder, pay the cost of the wonder instead of the cost of your card and select any card to bury underneath the wonder slot. For example, this move would bury the altar under your next available wonder slot.
+To build a wonder stage, pay the cost of the wonder instead of the cost of your card and select any card to bury underneath the wonder slot. Since stages must be built sequentially, there is only one possible next stage. For example, this move would bury the altar under your next available wonder slot.
 ```
 wonder altar
 ```

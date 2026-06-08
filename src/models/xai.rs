@@ -35,7 +35,7 @@ impl XaiClient {
         Ok(Self { client, api_key })
     }
 
-    pub fn complete(&self, model: &str, prompt: &str, system: Option<&str>) -> Result<(String, u64)> {
+    pub fn complete(&self, model: &str, prompt: &str, system: Option<&str>, max_tokens: Option<u32>) -> Result<(String, u64)> {
         let start = Instant::now();
 
         let mut messages = vec![];
@@ -45,11 +45,12 @@ impl XaiClient {
         }
         messages.push(serde_json::json!({ "role": "user", "content": prompt }));
 
+        let mt = max_tokens.unwrap_or(32);
         let body = serde_json::json!({
             "model": model,
             "messages": messages,
             "temperature": 0.0,
-            "max_tokens": 32,
+            "max_tokens": mt,
         });
 
         let resp = self.client

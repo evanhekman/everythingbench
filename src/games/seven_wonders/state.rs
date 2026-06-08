@@ -201,6 +201,58 @@ impl GameState {
         self.players[player].board.coins
     }
 
+    /// Returns whether the given terminal action is valid for the player right now.
+    /// Used by auto controllers in smoke tests to pick a purchaseable card.
+    pub fn is_valid_terminal_action(&self, player: usize, action: &TerminalAction) -> bool {
+        self.validate_afford(player, action).is_ok()
+    }
+
+    /// Build the private info text that goes inside a <decision> block for this player.
+    /// Includes current hand (ids), coins, wonder progress, own production, and what the two
+    /// neighbors can currently supply (fixed + their choice slots). Used by the log + LLM prompt.
+    pub fn get_private_decision_info(&self, player: usize) -> String {
+        let hand = self.players[player].current_hand.clone();
+        let coins = self.players[player].board.coins;
+        let stages = self.players[player].board.wonder_stages_built;
+        let my_fixed = self.compute_fixed_production(player);
+        let my_choices = self.collect_choice_options(player);
+
+        let left_p = self.neighbor_player(player, Neighbor::Left);
+        let right_p = self.neighbor_player(player, Neighbor::Right);
+        let left_fixed = self.compute_fixed_production(left_p);
+        let right_fixed = self.compute_fixed_production(right_p);
+        let left_choices = self.collect_choice_options(left_p);
+        let right_choices = self.collect_choice_options(right_p);
+
+        format!(
+            "hand: {:?}\ncoins: {}\nwonder_stages_built: {}\n\
+your_production: fixed={:?} choice_slots={:?}\n\n\
+left_player_{}_production: fixed={:?} choice_slots={:?}\n\
+right_player_{}_production: fixed={:?} choice_slots={:?}\n\n\
+Choose exactly one action now (trades optional, one unit per mention):\n\
+  play <card_id> [left:res[:n] ...]\n\
+  wonder <card_id> <stage> [trades...]\n\
+  burn <card_id>",
+            hand, coins, stages,
+            my_fixed, my_choices,
+            left_p, left_fixed, left_choices,
+            right_p, right_fixed, right_choices
+        )
+    }
+
+    /// Public summary text for the <summary> tag after a round resolves (coins + played cards).
+    /// This is what becomes visible to everyone in subsequent log history.
+    pub fn get_public_round_summary(&self) -> String {
+        let mut lines = vec![];
+        for (i, p) in self.players.iter().enumerate() {
+            lines.push(format!(
+                "player_{} has {} coins and the following cards: {:?}",
+                i, p.board.coins, p.board.played_cards
+            ));
+        }
+        lines.join("\n")
+    }
+
     // ==================== Resource / Cost / Trade helpers (for validation & apply) ====================
 
     fn compute_fixed_production(&self, player: usize) -> Resources {
@@ -298,7 +350,7 @@ impl GameState {
         trades.iter().map(|t| self.effective_buy_price(player, t.from, t.resource) as u32).sum()
     }
 
-    fn neighbor_player(&self, player: usize, from: Neighbor) -> usize {
+    pub(crate) fn neighbor_player(&self, player: usize, from: Neighbor) -> usize {
         let n = self.player_count as usize;
         match from {
             Neighbor::Left => (player + n - 1) % n,
@@ -532,26 +584,100 @@ impl GameState {
     }
 }
 
+/// Small helpers for log action lines (human-readable in the XML).
+fn format_resource(r: Resource) -> &'static str {
+    match r {
+        Resource::Wood => "wood",
+        Resource::Stone => "stone",
+        Resource::Ore => "ore",
+        Resource::Clay => "clay",
+        Resource::Glass => "glass",
+        Resource::Loom => "loom",
+        Resource::Papyrus => "papyrus",
+    }
+}
+
+fn format_action_for_log(player: usize, action: &TerminalAction) -> String {
+    match action {
+        TerminalAction::PlayCard { card_id, trades } => {
+            let tstr = if trades.is_empty() {
+                String::new()
+            } else {
+                let parts: Vec<String> = trades
+                    .iter()
+                    .map(|t| {
+                        let side = if matches!(t.from, Neighbor::Left) { "left" } else { "right" };
+                        format!("{}:{}", side, format_resource(t.resource))
+                    })
+                    .collect();
+                format!(" {}", parts.join(" "))
+            };
+            format!("player_{} played {}{}", player, card_id, tstr)
+        }
+        TerminalAction::BuildWonder { card_id, stage, trades } => {
+            let tstr = if trades.is_empty() {
+                String::new()
+            } else {
+                let parts: Vec<String> = trades
+                    .iter()
+                    .map(|t| {
+                        let side = if matches!(t.from, Neighbor::Left) { "left" } else { "right" };
+                        format!("{}:{}", side, format_resource(t.resource))
+                    })
+                    .collect();
+                format!(" {}", parts.join(" "))
+            };
+            format!("player_{} built wonder {} stage {}{}", player, card_id, stage, tstr)
+        }
+        TerminalAction::BurnCard { card_id } => {
+            format!("player_{} burned {}", player, card_id)
+        }
+    }
+}
+
+fn is_afford_related_error(reason: &str) -> bool {
+    let r = reason.to_lowercase();
+    r.contains("insufficient resources") ||
+    r.contains("not enough coins") ||
+    r.contains("not available from self or neighbors") ||
+    r.contains("invalid trades")
+}
+
 /// Run a full (stub) game with the given controllers.
 /// Each round, for each player, the controller's decide_action is called (which can loop observations),
 /// then the terminal action is submitted.
 /// After 6 rounds, battles (stub), next age, etc.
 pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
-    run_game_with_max_rounds(controllers, u32::MAX);
+    run_limited_rounds_game(controllers, u32::MAX);
 }
 
 /// Quick smoke test: runs only the first 2 rounds of age 1.
 /// Useful for fast iteration when testing agents without burning through a full 18-round game.
 pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
-    run_game_with_max_rounds(controllers, 2);
+    run_limited_rounds_game(controllers, 2);
 }
 
-fn run_game_with_max_rounds(mut controllers: Vec<Box<dyn super::controller::PlayerController>>, max_rounds: u32) {
+/// Dedicated limited-rounds game runner (used by smoke tests and normal runs).
+/// max_rounds: total number of rounds to play before stopping (across ages).
+///
+/// This is where the single shared log.txt + personalized per-agent views are built:
+/// - One GameLog accumulates the canonical full XML (with private <decision> blocks for whoever was deciding).
+/// - For controllers that prefer_log_context (i.e. LLM), we supply get_decision_view_for which only contains
+///   actions/summaries up to the previous round + the current player's open private decision block.
+/// - Same-round actions (even from earlier players in sequential execution) are hidden from the view (per clarif #7).
+/// - Autos (FirstPurchaseable) behavior is untouched: they call is_valid_terminal_action directly and we record
+///   only simple action lines for them.
+/// - Up to 3 attempts for log players on nonsensical/illegal; errors injected into the decision text (visible to model on retry).
+/// - Special second prompt on first afford fail: neighbors' production is appended to the current decision and we re-ask.
+/// - Full log is written to log.txt after every decision close and every round (for live `cat log.txt` or `tail -f`).
+/// - Console also prints the FULL LOG and the exact PERSONALIZED VIEW SENT each time for the agent.
+pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::PlayerController>>, max_rounds: u32) {
     let n = controllers.len() as u8;
     let mut game = GameState::new(n);
+    let mut game_log = super::GameLog::new();
 
-    let is_smoke = max_rounds == 2;
-    let label = if is_smoke { " (SMOKE: 2 rounds)" } else { "" };
+    let is_smoke = max_rounds <= 4; // treat 2 or 4 as the dedicated smoke style
+    let label = if max_rounds == 4 { " (SMOKE: 4 rounds, LLM only for player 1)" } else if max_rounds == 2 { " (SMOKE: 2 rounds)" } else { "" };
     println!("Starting Seven Wonders game{} with {} players (all Gizah A).", label, n);
 
     let mut total_rounds_played = 0u32;
@@ -562,6 +688,7 @@ fn run_game_with_max_rounds(mut controllers: Vec<Box<dyn super::controller::Play
         }
         game.current_age = age;
         game.start_age();
+        game_log.start_age(age as u8);
         println!("\n=== Age {} ===", age);
 
         let mut rounds_this_age = 0u32;
@@ -574,23 +701,105 @@ fn run_game_with_max_rounds(mut controllers: Vec<Box<dyn super::controller::Play
             game.current_round_actions = vec![None; n as usize];
             println!("\n-- Round {} --", round);
 
+            game_log.start_round(round as u8);
+
             for p in 0..n as usize {
-                loop {
-                    let action = controllers[p].decide_action(&game, p);
-                    if let SevenWondersAction::Terminal(term) = action {
-                        let res = game.submit_terminal_action(p, term);
-                        println!("Player {} result: {:?}", p, res);
-                        if matches!(res, ActionResult::Success { .. }) {
+                let prefers_log = controllers[p].prefers_log_context();
+
+                if prefers_log {
+                    // === Log-using controller (LLM): rich context, 3 attempts, special afford path, errors to model ===
+                    let private = game.get_private_decision_info(p);
+                    game_log.begin_player_decision(p, private);
+
+                    let mut attempts = 0u32;
+                    let mut got_success = false;
+
+                    loop {
+                        attempts += 1;
+                        if attempts > 3 {
+                            println!("[LLM p{}] 3 attempts exhausted for this decision - forcing fallback burn", p);
                             break;
+                        }
+
+                        let view = game_log.get_decision_view_for(p);
+
+                        // Show user the full built log + exactly what this agent is being sent (as requested).
+                        println!("=== FULL LOG (as being built, also written to log.txt) ===\n{}\n=== END FULL LOG ===", game_log.full_as_str());
+                        println!("=== PERSONALIZED VIEW SENT TO AGENT (player {}) attempt {} ===\n{}\n=== END SENT VIEW ===", p, attempts, view);
+
+                        let action = controllers[p].decide_action(&game, p, Some(&view));
+
+                        if let SevenWondersAction::Terminal(term) = action {
+                            let res = game.submit_terminal_action(p, term.clone());
+                            println!("Player {} result: {:?}", p, res);
+
+                            if matches!(res, ActionResult::Success { .. }) {
+                                let desc = format_action_for_log(p, &term);
+                                game_log.close_current_decision(&desc);
+                                got_success = true;
+                                break;
+                            } else if let ActionResult::Invalid { reason, .. } = res {
+                                let err_text = format!("\nAttempt {}: tried {:?}\nError: {}\n", attempts, term, reason);
+                                game_log.append_to_current_decision(&err_text);
+
+                                // Clarification #4: if unaffordable on the *first* try, do a second prompt that shows neighbors.
+                                if is_afford_related_error(&reason) && attempts == 1 {
+                                    let left = game.neighbor_player(p, Neighbor::Left);
+                                    let right = game.neighbor_player(p, Neighbor::Right);
+                                    let lfixed = game.compute_fixed_production(left);
+                                    let rfixed = game.compute_fixed_production(right);
+                                    let neigh = format!(
+                                        "\nNeighbors' current production (what you can buy from):\n  left (player {}): {:?}\n  right (player {}): {:?}\n\nWhat do you want to buy? Append trades to your play/wonder (e.g. play baths left:stone:1) or pick a card you can afford outright.\n",
+                                        left, lfixed, right, rfixed
+                                    );
+                                    game_log.append_to_current_decision(&neigh);
+                                }
+                                // loop -> re-invoke decide with the augmented decision text now inside the view
+                            }
                         } else {
-                            // Re-ask this player (human re-prompts; LLM re-queries model).
-                            // This matches the agent contract: invalids are reported, choose again.
+                            game_log.append_to_current_decision(&format!("\nAttempt {}: returned a non-terminal (observe) action. Only play/wonder/burn are allowed.\n", attempts));
+                        }
+                    }
+
+                    if !got_success {
+                        // Fallback burn after exhausting attempts (still record in log)
+                        if let Some(card) = game.players[p].current_hand.first().cloned() {
+                            let fb = TerminalAction::BurnCard { card_id: card.clone() };
+                            let _ = game.submit_terminal_action(p, fb.clone());
+                            let desc = format!("player_{} forced-burn {} (after 3 failed attempts)", p, card);
+                            game_log.close_current_decision(&desc);
+                        }
+                    }
+                } else {
+                    // === Non-log controllers (Auto FirstPurchaseable + Human): behavior unchanged ===
+                    // Autos still use direct engine is_valid + pick first playable. We just record their action as simple line.
+                    loop {
+                        let action = controllers[p].decide_action(&game, p, None);
+                        if let SevenWondersAction::Terminal(term) = action {
+                            let res = game.submit_terminal_action(p, term.clone());
+                            println!("Player {} result: {:?}", p, res);
+                            if matches!(res, ActionResult::Success { .. }) {
+                                let desc = format_action_for_log(p, &term);
+                                game_log.append_simple_player_action(p, &desc);
+                                break;
+                            } else {
+                                // Re-ask (humans re-enter their menu loop on next decide call; autos should not hit invalid)
+                            }
                         }
                     }
                 }
             }
+
             total_rounds_played += 1;
             rounds_this_age += 1;
+
+            // Round fully resolved inside the last player's submit.
+            // Now emit the public summary (visible to all subsequent decisions) and commit the round.
+            let summary = game.get_public_round_summary();
+            game_log.add_round_summary(&summary);
+
+            // Extra visibility of the built log after the round (in addition to the per-decision prints).
+            println!("=== FULL LOG AFTER ROUND {} (committed for next round; also in log.txt) ===\n{}\n=== END ===", round, game_log.full_as_str());
         }
 
         if rounds_this_age == 6 {
@@ -598,8 +807,13 @@ fn run_game_with_max_rounds(mut controllers: Vec<Box<dyn super::controller::Play
         }
     }
 
-    if is_smoke {
-        println!("\nSmoke game finished after 2 rounds (full scoring/battles stubbed for now).");
+    game_log.close_age();
+    game_log.write_to_disk();
+
+    if max_rounds == 4 {
+        println!("\nDedicated smoke finished after 4 rounds. Full log in log.txt. Check console for the views that were sent to the LLM.");
+    } else if is_smoke {
+        println!("\nSmoke game finished after {} rounds (full scoring/battles stubbed for now).", max_rounds);
     } else {
         println!("\nGame finished (full scoring/battles stubbed for now).");
     }

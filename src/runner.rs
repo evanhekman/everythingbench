@@ -10,17 +10,33 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
     validate_model(model)?;
 
     if benchmark == "seven-wonders" {
-        // Smoke test version: 3-agent game, only 2 rounds (quick iteration).
-        // For a full game, you can call run_game directly from code, or temporarily
-        // change this to run_game.
-        println!("Starting Seven Wonders SMOKE (2 rounds, 3 agents) with model {}", model);
-        use crate::games::seven_wonders::{controller::PlayerController, LLMController, run_smoke_game};
+        // Normal / interactive mode: 2 humans + 1 LLM with the given model, full game.
+        println!("Starting Seven Wonders with 2 humans + 1 AI ({})", model);
+        use crate::games::seven_wonders::{controller::PlayerController, HumanController, LLMController, run_game};
         let controllers: Vec<Box<dyn PlayerController>> = vec![
-            Box::new(LLMController::new(model.to_string())),
-            Box::new(LLMController::new(model.to_string())),
+            Box::new(HumanController::new("Human1".to_string())),
+            Box::new(HumanController::new("Human2".to_string())),
             Box::new(LLMController::new(model.to_string())),
         ];
-        run_smoke_game(controllers);
+        run_game(controllers);
+        return Ok(());
+    }
+
+    if benchmark == "seven-wonders-smoke" {
+        // Dedicated smoke test (per spec):
+        // - 4 rounds total (via run_limited_rounds_game)
+        // - Only the middle controller (player 1) is LLM using the given model; it receives the personalized log view each turn.
+        // - Players 0 and 2 are FirstPurchaseableController (auto: first valid play with 0 trades). Their behavior is unchanged.
+        // - The engine builds a single log.txt (full, with private decision blocks) + prints the exact views sent to the agent.
+        // - Up to 3 retries + error injection for the LLM; special neighbors second prompt on first unaffordable attempt.
+        println!("Starting dedicated Seven Wonders smoke test (4 rounds): log-based LLM only for player 1; autos for 0+2 (unchanged)");
+        use crate::games::seven_wonders::{controller::PlayerController, LLMController, FirstPurchaseableController, run_limited_rounds_game};
+        let controllers: Vec<Box<dyn PlayerController>> = vec![
+            Box::new(FirstPurchaseableController),           // player 0 auto
+            Box::new(LLMController::new(model.to_string())), // player 1 = grok (gets log)
+            Box::new(FirstPurchaseableController),           // player 2 auto
+        ];
+        run_limited_rounds_game(controllers, 4);
         return Ok(());
     }
 
@@ -54,7 +70,7 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
 
         println!("  Running trial {}...", trial.id);
 
-        let (raw_response, latency_ms) = client.complete(model, &user_prompt, None)?;
+        let (raw_response, latency_ms) = client.complete(model, &user_prompt, None, None)?;
 
         // Very simple parsing: look for yes or no (case insensitive)
         let cleaned = raw_response.trim().to_lowercase();

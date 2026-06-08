@@ -5,14 +5,16 @@
 
 pub mod actions;
 pub mod cards;
+pub mod controller;
+pub mod log;
 pub mod state;
 pub mod types;
-pub mod controller;
 
 pub use self::actions::{
     ActionResult, ObservationAction, SevenWondersAction, TerminalAction,
 };
 pub use self::cards::{CardDatabase, Card};
-pub use self::state::{GameState, PlayerBoard, PlayerState, PlayerView, run_game, run_smoke_game};
-pub use self::controller::{HumanController, LLMController, PlayerController};
+pub use self::controller::{FirstPurchaseableController, HumanController, LLMController, PlayerController};
+pub use self::log::GameLog;
+pub use self::state::{GameState, PlayerBoard, PlayerState, PlayerView, run_game, run_limited_rounds_game, run_smoke_game};
 pub use self::types::{Cost, DiscountType, Effect, Neighbor, Resource, Resources, ScienceSymbol, Trade};
