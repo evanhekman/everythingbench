@@ -232,13 +232,6 @@ impl GameState {
         }
     }
 
-    fn format_hand_for_log(hand: &[String]) -> String {
-        if hand.is_empty() {
-            return "[]".to_string();
-        }
-        format!("[{}]", hand.join(", "))
-    }
-
     pub fn get_private_decision_info(&self, player: usize) -> String {
         let hand = &self.players[player].current_hand;
         let coins = self.players[player].board.coins;
@@ -262,7 +255,7 @@ impl GameState {
 your_production: [{}]\n\
 left (Player {}) production: [{}]\n\
 right (Player {}) production: [{}]\n",
-            Self::format_hand_for_log(hand),
+            self.card_db.format_hand_block(hand),
             coins,
             stages,
             your_prod.join(", "),

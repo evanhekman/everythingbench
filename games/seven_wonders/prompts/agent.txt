@@ -7,7 +7,11 @@ This is an example of the log format you will receive (plain text, easy to read 
 === AGE 1 ===
 --- Round 1 ---
 --- Your Turn ---
-hand: [baths, scriptorium, timber_yard, marketplace, ...]
+hand: [
+baths        blue    [stone]    +3 points
+scriptorium  green   [paper]    +1 tablet
+...
+]
 coins: 3
 wonder_stages_built: 0
 your_production: []
@@ -26,7 +30,11 @@ Player 2 played glassworks
 
 --- Round 2 ---
 --- Your Turn ---
-hand: [apothecary, workshop, ...]
+hand: [
+apothecary  green   [cloth]    +1 compass
+workshop    green   [glass]    +1 cog
+...
+]
 coins: 3
 wonder_stages_built: 0
 your_production: []
@@ -44,7 +52,11 @@ Player 2 played excavation
 
 --- Round 3 ---
 --- Your Turn ---
-hand: [scriptorium, east_trading_post, ...]
+hand: [
+scriptorium         green    []         +1 tablet
+east_trading_post   yellow   []         buy [wood, stone, brick, ore] from right_neighbor for 1 coin instead of 2
+...
+]
 coins: 2
 wonder_stages_built: 0
 your_production: []

@@ -59,12 +59,58 @@ pub fn format_card_id(game: &GameState, card_id: &str) -> String {
     format!("{}{}{RESET}", card_color_code(color), card_id)
 }
 
+fn pad_visible_field(display: &str, visible_len: usize, width: usize) -> String {
+    if visible_len >= width {
+        display.to_string()
+    } else {
+        format!("{display}{}", " ".repeat(width - visible_len))
+    }
+}
+
 pub fn format_hand_list(game: &GameState, hand: &[String]) -> String {
-    if hand.is_empty() {
+    let rows = game.card_db.hand_display_rows(hand);
+    if rows.is_empty() {
         return "[]".to_string();
     }
-    let parts: Vec<String> = hand.iter().map(|id| format_card_id(game, id)).collect();
-    format!("[{}]", parts.join(", "))
+    if !stdout_is_tty() {
+        return game.card_db.format_hand_rows(&rows);
+    }
+    let w_id = rows.iter().map(|r| r.id.len()).max().unwrap_or(0);
+    let w_color = rows.iter().map(|r| r.color.len()).max().unwrap_or(0);
+    let w_cost = rows.iter().map(|r| r.cost.len()).max().unwrap_or(0);
+    let lines: Vec<String> = rows
+        .iter()
+        .map(|row| {
+            let colored_id = format_card_id(game, &row.id);
+            format!(
+                "{}\t{}{}{}{}{}",
+                pad_visible_field(&colored_id, row.id.len(), w_id),
+                super::cards::pad_field(&row.color, w_color),
+                super::cards::TAB_PAIR,
+                super::cards::pad_field(&row.cost, w_cost),
+                super::cards::TAB_PAIR,
+                row.benefit
+            )
+        })
+        .collect();
+    format!("[\n{}\n]", lines.join("\n"))
+}
+
+fn colorize_hand_detail_line(game: &GameState, line: &str) -> Option<String> {
+    let tab_start = line.find('\t')?;
+    let id_field = &line[..tab_start];
+    let card_id = id_field.trim_end();
+    if game.card_db.get(card_id).is_none() {
+        return None;
+    }
+    let padding = id_field.len() - card_id.len();
+    let colored_id = format_card_id(game, card_id);
+    Some(format!(
+        "{}{}{}",
+        colored_id,
+        " ".repeat(padding),
+        &line[tab_start..]
+    ))
 }
 
 fn colorize_log_line(game: &GameState, player: usize, line: &str) -> String {
@@ -75,9 +121,11 @@ fn colorize_log_line(game: &GameState, player: usize, line: &str) -> String {
     if trimmed.starts_with("ERROR:") {
         return red(trimmed);
     }
-    if trimmed.starts_with("hand: ") {
-        let hand = &game.players[player].current_hand;
-        return format!("hand: {}", format_hand_list(game, hand));
+    if trimmed == "hand: []" {
+        return "hand: []".to_string();
+    }
+    if let Some(colored) = colorize_hand_detail_line(game, trimmed) {
+        return colored;
     }
     if trimmed.starts_with("your_production:")
         || trimmed.starts_with("left (Player")

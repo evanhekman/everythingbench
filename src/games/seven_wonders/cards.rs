@@ -215,4 +215,279 @@ impl CardDatabase {
         }
         pool
     }
+
+    /// Build tabular hand rows (id, color, cost, benefit) for the given card ids.
+    pub fn hand_display_rows(&self, hand: &[String]) -> Vec<HandDisplayRow> {
+        hand.iter()
+            .map(|id| {
+                if let Some(card) = self.get(id) {
+                    HandDisplayRow {
+                        id: id.clone(),
+                        color: normalize_card_color(&card.color).to_string(),
+                        cost: format_cost_brackets(&card.cost),
+                        benefit: format_effect_benefit(&card.effect),
+                    }
+                } else {
+                    HandDisplayRow {
+                        id: id.clone(),
+                        color: "?".to_string(),
+                        cost: "[]".to_string(),
+                        benefit: "?".to_string(),
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// One aligned hand line (single-card widths).
+    pub fn format_hand_entry(&self, card_id: &str) -> String {
+        let rows = self.hand_display_rows(&[card_id.to_string()]);
+        self.format_hand_rows(&rows)
+    }
+
+    /// Multiline hand block for logs and prompts.
+    pub fn format_hand_block(&self, hand: &[String]) -> String {
+        let rows = self.hand_display_rows(hand);
+        self.format_hand_rows(&rows)
+    }
+
+    /// Format rows with tab-separated, width-padded columns.
+    pub fn format_hand_rows(&self, rows: &[HandDisplayRow]) -> String {
+        if rows.is_empty() {
+            return "[]".to_string();
+        }
+        let w_id = rows.iter().map(|r| r.id.len()).max().unwrap_or(0);
+        let w_color = rows.iter().map(|r| r.color.len()).max().unwrap_or(0);
+        let w_cost = rows.iter().map(|r| r.cost.len()).max().unwrap_or(0);
+        let lines: Vec<String> = rows
+            .iter()
+            .map(|r| format_hand_row_line(r, w_id, w_color, w_cost))
+            .collect();
+        format!("[\n{}\n]", lines.join("\n"))
+    }
+}
+
+/// One row of the tabular hand display.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandDisplayRow {
+    pub id: String,
+    pub color: String,
+    pub cost: String,
+    pub benefit: String,
+}
+
+pub(crate) fn pad_field(value: &str, width: usize) -> String {
+    if value.len() >= width {
+        value.to_string()
+    } else {
+        format!("{value}{}", " ".repeat(width - value.len()))
+    }
+}
+
+pub(crate) const TAB_PAIR: &str = "\t\t";
+
+pub(crate) fn format_hand_row_line(
+    row: &HandDisplayRow,
+    w_id: usize,
+    w_color: usize,
+    w_cost: usize,
+) -> String {
+    format!(
+        "{}\t{}{}{}{}{}",
+        pad_field(&row.id, w_id),
+        pad_field(&row.color, w_color),
+        TAB_PAIR,
+        pad_field(&row.cost, w_cost),
+        TAB_PAIR,
+        row.benefit
+    )
+}
+
+fn friendly_resource(r: Resource) -> &'static str {
+    match r {
+        Resource::Clay => "brick",
+        Resource::Papyrus => "paper",
+        Resource::Loom => "cloth",
+        Resource::Wood => "wood",
+        Resource::Stone => "stone",
+        Resource::Ore => "ore",
+        Resource::Glass => "glass",
+    }
+}
+
+fn normalize_card_color(color: &str) -> &str {
+    match color {
+        "grey" => "gray",
+        other => other,
+    }
+}
+
+fn format_cost_brackets(cost: &Cost) -> String {
+    let mut parts = Vec::new();
+    if cost.coins > 0 {
+        if cost.coins == 1 {
+            parts.push("1 coin".to_string());
+        } else {
+            parts.push(format!("{} coins", cost.coins));
+        }
+    }
+    for res in Resource::all() {
+        let amount = cost.resources.get(*res);
+        for _ in 0..amount {
+            parts.push(friendly_resource(*res).to_string());
+        }
+    }
+    if parts.is_empty() {
+        "[]".to_string()
+    } else {
+        format!("[{}]", parts.join(", "))
+    }
+}
+
+fn format_production_benefit(fixed: &Resources, choice: &Option<Vec<Resource>>) -> String {
+    if let Some(choices) = choice {
+        if choices.is_empty() {
+            return String::new();
+        }
+        return choices
+            .iter()
+            .map(|r| format!("+1 {}", friendly_resource(*r)))
+            .collect::<Vec<_>>()
+            .join(" or ");
+    }
+    let mut parts = Vec::new();
+    for res in Resource::all() {
+        let amount = fixed.get(*res);
+        if amount > 0 {
+            parts.push(format!("+{amount} {}", friendly_resource(*res)));
+        }
+    }
+    parts.join(", ")
+}
+
+fn format_effect_benefit(effect: &Effect) -> String {
+    match effect {
+        Effect::VictoryPoints(n) => format!("+{n} points"),
+        Effect::Coins(n) => format!("+{n} coins"),
+        Effect::Military(n) => format!("+{n} military"),
+        Effect::Science(sym) => match sym {
+            ScienceSymbol::Tablet => "+1 tablet".to_string(),
+            ScienceSymbol::Compass => "+1 compass".to_string(),
+            ScienceSymbol::Gear => "+1 cog".to_string(),
+        },
+        Effect::Production { fixed, choice } => format_production_benefit(fixed, choice),
+        Effect::TradeDiscount {
+            direction,
+            kind,
+            cost,
+        } => {
+            let resources = match kind {
+                DiscountType::RawMaterials => "[wood, stone, brick, ore]",
+                DiscountType::ManufacturedGoods => "[paper, glass, cloth]",
+            };
+            let neighbor = match direction {
+                Some(Neighbor::Left) => "left_neighbor",
+                Some(Neighbor::Right) => "right_neighbor",
+                None => "either neighbor",
+            };
+            format!("buy {resources} from {neighbor} for {cost} coin instead of 2")
+        }
+        Effect::CoinsPerNeighbor { color, amount } => {
+            format!("+{amount} coins per neighbor {color}")
+        }
+        Effect::PointsPerNeighbor { color, amount } => {
+            format!("+{amount} points per neighbor {color}")
+        }
+        Effect::Other(v) => {
+            if v.is_null() {
+                return "?".to_string();
+            }
+            if let Some(obj) = v.as_object() {
+                if let Some(pts) = obj.get("points").and_then(|x| x.as_i64()) {
+                    return format!("+{pts} points");
+                }
+                if let Some(coins) = obj.get("coins").and_then(|x| x.as_i64()) {
+                    return format!("+{coins} coins");
+                }
+            }
+            "?".to_string()
+        }
+    }
+}
+
+#[cfg(test)]
+mod hand_format_tests {
+    use super::*;
+
+    fn hand_row_columns(line: &str) -> Vec<&str> {
+        line.split('\t').filter(|s| !s.is_empty()).collect()
+    }
+
+    #[test]
+    fn tab_rules_single_after_id_double_between_other_columns() {
+        let db = CardDatabase::load();
+        let rows = db.hand_display_rows(&["loom".to_string(), "glassworks".to_string()]);
+        let w_id = rows.iter().map(|r| r.id.len()).max().unwrap();
+        let w_color = rows.iter().map(|r| r.color.len()).max().unwrap();
+        let w_cost = rows.iter().map(|r| r.cost.len()).max().unwrap();
+        let loom_line = format_hand_row_line(&rows[0], w_id, w_color, w_cost);
+        let glass_line = format_hand_row_line(&rows[1], w_id, w_color, w_cost);
+        let cols_loom = hand_row_columns(&loom_line);
+        let cols_glass = hand_row_columns(&glass_line);
+        assert_eq!(cols_loom[0].trim_end(), "loom");
+        assert_eq!(cols_glass[0].trim_end(), "glassworks");
+        assert!(!loom_line.contains("loom\t\t"), "loom must not double-tab after id");
+        assert!(loom_line.contains(&format!("gray{TAB_PAIR}")), "line: {loom_line}");
+    }
+
+    #[test]
+    fn hand_rows_align_columns_with_tabs() {
+        let db = CardDatabase::load();
+        let hand = vec![
+            "baths".to_string(),
+            "loom".to_string(),
+            "theater".to_string(),
+        ];
+        let rows = db.hand_display_rows(&hand);
+        let block = db.format_hand_rows(&rows);
+        let lines: Vec<&str> = block
+            .lines()
+            .filter(|l| !l.trim().is_empty() && *l != "[" && *l != "]")
+            .collect();
+        assert_eq!(lines.len(), 3, "block:\n{block}");
+        for line in &lines {
+            let cols = hand_row_columns(line);
+            assert_eq!(cols.len(), 4, "line: {line}");
+        }
+        // id column width = 7 ("theater"); shorter ids are space-padded before the tab
+        let cols0 = hand_row_columns(lines[0]);
+        assert_eq!(cols0[0].trim_end(), "baths");
+        assert_eq!(cols0[1].trim_end(), "blue");
+        assert_eq!(cols0[2].trim_end(), "[stone]");
+        assert_eq!(cols0[3], "+3 points");
+
+        let cols1 = hand_row_columns(lines[1]);
+        assert_eq!(cols1[0].trim_end(), "loom");
+        assert_eq!(cols1[1].trim_end(), "gray");
+        assert_eq!(cols1[2].trim_end(), "[]");
+        assert_eq!(cols1[3], "+1 cloth");
+
+        let cols2 = hand_row_columns(lines[2]);
+        assert_eq!(cols2[0], "theater");
+        assert_eq!(cols2[1].trim_end(), "blue");
+        assert_eq!(cols2[2].trim_end(), "[]");
+        assert_eq!(cols2[3], "+3 points");
+    }
+
+    #[test]
+    fn hand_block_is_multiline() {
+        let db = CardDatabase::load();
+        let hand = vec!["baths".to_string(), "loom".to_string()];
+        let block = db.format_hand_block(&hand);
+        assert!(block.starts_with("[\n"));
+        assert!(block.contains("baths"));
+        assert!(block.contains("loom"));
+        assert!(block.contains('\t'));
+        assert!(block.ends_with("\n]"));
+    }
 }
