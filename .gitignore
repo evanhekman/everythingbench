@@ -10,3 +10,4 @@ results/latest.json
 # OS
 .DS_Store
 Thumbs.db
+log.txt
