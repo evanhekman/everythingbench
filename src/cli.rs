@@ -38,6 +38,10 @@ pub enum Commands {
         /// Stop after this many rounds (default: full game)
         #[arg(long)]
         rounds: Option<u32>,
+
+        /// Publish this run to the website after completion
+        #[arg(long)]
+        publish: bool,
     },
 
     /// Publish the latest raw run for a model + benchmark to the website

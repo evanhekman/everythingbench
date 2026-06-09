@@ -5,7 +5,7 @@ use super::types::{Effect, ScienceSymbol};
 use std::collections::HashMap;
 
 /// Breakdown of a player's final score.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ScoreBreakdown {
     pub military_victory: i32,
     pub military_defeat: i32,
@@ -92,7 +92,7 @@ fn science_vp(symbols: &[String], played: &[String]) -> i32 {
     let mut score = 0i32;
     for sym in ["compass", "tablet", "gear"] {
         let n = *counts.get(sym).unwrap_or(&0);
-        score += (n * (n + 1) / 2) as i32;
+        score += (n * n) as i32;
     }
     let sets = counts
         .get("compass")
@@ -160,5 +160,32 @@ pub fn science_symbol_name(sym: ScienceSymbol) -> &'static str {
         ScienceSymbol::Compass => "compass",
         ScienceSymbol::Tablet => "tablet",
         ScienceSymbol::Gear => "gear",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn science_score(tablets: usize, gears: usize, compasses: usize) -> i32 {
+        let mut symbols = Vec::new();
+        for _ in 0..tablets {
+            symbols.push("tablet".to_string());
+        }
+        for _ in 0..gears {
+            symbols.push("gear".to_string());
+        }
+        for _ in 0..compasses {
+            symbols.push("compass".to_string());
+        }
+        science_vp(&symbols, &[])
+    }
+
+    #[test]
+    fn science_scoring_tablets_gears_compasses() {
+        // Per-symbol: n² VP; complete sets (min of the three counts): +7 each
+        assert_eq!(science_score(1, 1, 1), 10); // 1+1+1 + 7
+        assert_eq!(science_score(1, 2, 3), 21); // 1+4+9 + 7
+        assert_eq!(science_score(3, 3, 4), 55); // 9+9+16 + 21
     }
 }

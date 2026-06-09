@@ -4,6 +4,7 @@
 
 use super::actions::{ActionResult, SevenWondersAction, TerminalAction, Trade, Neighbor};
 use super::cards::CardDatabase;
+use super::wonders::{format_wonder_current_stage, format_wonder_stages_overview, stage_def, stage_to_cost};
 use super::scoring::{self, ScoreBreakdown};
 use super::types::{Cost, DiscountType, Effect, Resource, Resources};
 use serde_json::Value;
@@ -250,20 +251,26 @@ impl GameState {
         let left_prod = Self::format_production_list(&left_fixed, &left_choices);
         let right_prod = Self::format_production_list(&right_fixed, &right_choices);
 
+        let wonder_id = &self.players[player].board.wonder_id;
         format!(
-            "hand: {}\ncoins: {}\nwonder_stages_built: {}\n\
+            "hand: {}\ncoins: {}\n{}\n\
 your_production: [{}]\n\
 left (Player {}) production: [{}]\n\
 right (Player {}) production: [{}]\n",
             self.card_db.format_hand_block(hand),
             coins,
-            stages,
+            format_wonder_current_stage(wonder_id, stages),
             your_prod.join(", "),
             left_p,
             left_prod.join(", "),
             right_p,
             right_prod.join(", ")
         )
+    }
+
+    /// All wonder stages for startup prompts (Gizah A).
+    pub fn format_wonder_stages_overview(&self, player: usize) -> String {
+        format_wonder_stages_overview(&self.players[player].board.wonder_id)
     }
 
     pub(crate) fn format_production_list(fixed: &Resources, choices: &[Vec<Resource>]) -> Vec<String> {
@@ -416,9 +423,23 @@ right (Player {}) production: [{}]\n",
         prod
     }
 
+    /// Choice-production cards whose output is for the owner's use only (not purchasable by neighbors).
+    const NON_TRADEABLE_PRODUCTION_CARDS: &'static [&'static str] = &["caravansery", "forum"];
+
     fn collect_choice_options(&self, player: usize) -> Vec<Vec<Resource>> {
+        self.collect_choice_options_inner(player, false)
+    }
+
+    fn collect_tradeable_choice_options(&self, player: usize) -> Vec<Vec<Resource>> {
+        self.collect_choice_options_inner(player, true)
+    }
+
+    fn collect_choice_options_inner(&self, player: usize, exclude_non_tradeable: bool) -> Vec<Vec<Resource>> {
         let mut choices = vec![];
         for cid in &self.players[player].board.played_cards {
+            if exclude_non_tradeable && Self::NON_TRADEABLE_PRODUCTION_CARDS.contains(&cid.as_str()) {
+                continue;
+            }
             if let Some(card) = self.card_db.get(cid) {
                 if let Effect::Production { choice: Some(opts), .. } = &card.effect {
                     if !opts.is_empty() {
@@ -539,7 +560,7 @@ right (Player {}) production: [{}]\n",
                 still.push(*r);
             }
         }
-        let mut slots = self.collect_choice_options(neigh_player);
+        let mut slots = self.collect_tradeable_choice_options(neigh_player);
         for nr in still {
             if let Some(idx) = slots.iter().position(|opts| opts.contains(&nr)) {
                 slots.remove(idx);
@@ -551,21 +572,9 @@ right (Player {}) production: [{}]\n",
     }
 
     fn wonder_stage_cost(&self, wonder_id: &str, stage: u8) -> Cost {
-        if wonder_id != "gizah_a" {
-            return Cost::default();
-        }
-        // Giza A (standard base game costs)
-        let pairs: Vec<(Resource, u8)> = match stage {
-            1 => vec![(Resource::Stone, 2)],
-            2 => vec![(Resource::Wood, 3)],
-            3 => vec![(Resource::Stone, 4)],
-            _ => vec![],
-        };
-        let mut res = Resources::default();
-        for (r, a) in pairs {
-            res.add(r, a);
-        }
-        Cost { coins: 0, resources: res }
+        stage_def(wonder_id, stage)
+            .map(|def| stage_to_cost(&def))
+            .unwrap_or_default()
     }
 
     fn validate_card_play(&self, player: usize, card_id: &str, trades: &[Trade]) -> Result<(), String> {
@@ -833,14 +842,23 @@ fn format_error_for_log(reason: &str) -> String {
 /// Each round, for each player, the controller's decide_action is called (which can loop observations),
 /// then the terminal action is submitted.
 /// After 6 rounds, battles (stub), next age, etc.
-pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
-    run_limited_rounds_game(controllers, u32::MAX);
+/// Outcome of a Seven Wonders session (full or limited rounds).
+#[derive(Debug, Clone)]
+pub struct SevenWondersGameOutcome {
+    pub player_count: u8,
+    pub rounds_played: u32,
+    pub game_complete: bool,
+    pub final_scores: Option<Vec<super::scoring::ScoreBreakdown>>,
+}
+
+pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) -> SevenWondersGameOutcome {
+    run_limited_rounds_game(controllers, u32::MAX)
 }
 
 /// Quick smoke test: runs only the first 2 rounds of age 1.
 /// Useful for fast iteration when testing agents without burning through a full 18-round game.
-pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) {
-    run_limited_rounds_game(controllers, 2);
+pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) -> SevenWondersGameOutcome {
+    run_limited_rounds_game(controllers, 2)
 }
 
 /// Dedicated limited-rounds game runner (used by smoke tests and normal runs).
@@ -856,7 +874,10 @@ pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerControll
 /// - LLM agents get up to 3 attempts on illegal actions, then a forced burn fallback.
 /// - Full log is written to log.txt after every decision close and every round (for live `cat log.txt` or `tail -f`).
 /// - Console also prints the FULL LOG and the exact PERSONALIZED VIEW SENT each time for the agent.
-pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::PlayerController>>, max_rounds: u32) {
+pub fn run_limited_rounds_game(
+    mut controllers: Vec<Box<dyn super::controller::PlayerController>>,
+    max_rounds: u32,
+) -> SevenWondersGameOutcome {
     let n = controllers.len() as u8;
     let mut game = GameState::new(n);
     let mut game_log = super::GameLog::new();
@@ -1018,6 +1039,13 @@ pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::P
     } else {
         println!("\nStopped after {} rounds.", max_rounds);
     }
+
+    SevenWondersGameOutcome {
+        player_count: n,
+        rounds_played: total_rounds_played,
+        game_complete: game.is_game_over(),
+        final_scores: game.final_scores.clone(),
+    }
 }
 
 /// A view of the game from one player's perspective.
@@ -1052,6 +1080,59 @@ mod tests {
             }
             other => panic!("expected Invalid containing {:?}, got {:?}", hint, other),
         }
+    }
+
+    /// Set cumulative military strength using red cards (+1/+2/+3).
+    fn set_military_strength(game: &mut GameState, player: usize, strength: i32) {
+        assert!(strength >= 0, "strength must be non-negative");
+        let mut cards = Vec::new();
+        let mut rem = strength;
+        for _ in 0..(rem / 3) {
+            cards.push("fortifications".to_string());
+        }
+        rem %= 3;
+        for _ in 0..(rem / 2) {
+            cards.push("stables".to_string());
+        }
+        rem %= 2;
+        for _ in 0..rem {
+            cards.push("stockade".to_string());
+        }
+        game.players[player].board.played_cards = cards;
+        assert_eq!(
+            game.military_strength(player),
+            strength,
+            "failed to set military strength for player {player}"
+        );
+    }
+
+    fn resolve_battles_for_age(
+        game: &mut GameState,
+        age: u8,
+        strengths: [i32; 3],
+    ) -> Vec<(i8, i8)> {
+        game.current_age = age;
+        for (p, &s) in strengths.iter().enumerate() {
+            set_military_strength(game, p, s);
+            game.players[p].board.military_victory_vp = 0;
+            game.players[p].board.defeat_tokens = 0;
+        }
+        game.resolve_battles();
+        game.last_age_battle_deltas.clone()
+    }
+
+    fn assert_battle_deltas(
+        age: u8,
+        strengths: [i32; 3],
+        expected: [(i8, i8); 3],
+        label: &str,
+    ) {
+        let mut game = GameState::new(3);
+        let deltas = resolve_battles_for_age(&mut game, age, strengths);
+        assert_eq!(
+            deltas, expected,
+            "{label}: age {age} strengths {strengths:?}"
+        );
     }
 
     /// Invalid actions must not queue a round action or spend resources/coins early.
@@ -1093,6 +1174,28 @@ mod tests {
                 },
             );
         }
+    }
+
+    #[test]
+    fn private_decision_info_includes_wonder_current_stage() {
+        let game = GameState::new(3);
+        let info = game.get_private_decision_info(0);
+        assert!(info.contains("wonder\t(0/3)\t[wood, wood]\t+3 points"));
+
+        let mut game2 = GameState::new(3);
+        game2.players[0].board.wonder_stages_built = 1;
+        let info2 = game2.get_private_decision_info(0);
+        assert!(info2.contains("wonder\t(1/3)\t[brick, brick, cloth]\t+5 points"));
+    }
+
+    #[test]
+    fn wonder_stages_overview_lists_all_gizah_stages() {
+        let game = GameState::new(3);
+        let overview = game.format_wonder_stages_overview(0);
+        assert!(overview.contains("wonder stages (Gizah A)"));
+        assert!(overview.contains("(1/3)"));
+        assert!(overview.contains("(2/3)"));
+        assert!(overview.contains("(3/3)"));
     }
 
     #[test]
@@ -1206,16 +1309,18 @@ mod tests {
     fn wonder_stage_fails_if_resources_not_available() {
         let mut game = GameState::new(3);
         game.players[0].current_hand = vec!["lumber_yard".to_string()];
-        // stage 1 gizah requires 2 stone, no stone producers
+        // stage 1 Gizah A requires 2 wood, no wood producers
         let action = TerminalAction::BuildWonder {
             card_id: "lumber_yard".to_string(),
             stage: 1,
             trades: vec![],
         };
-        // to reach validate we submit dummies for others? For fail we can submit direct, it will validate even if not all
         let res = game.submit_terminal_action(0, action);
         if let ActionResult::Invalid { reason, .. } = res {
-            assert!(reason.contains("resource") || reason.contains("stone") || reason.contains("Insufficient"), "got: {}", reason);
+            assert!(
+                reason.contains("resource") || reason.contains("wood") || reason.contains("Insufficient"),
+                "got: {reason}"
+            );
         } else {
             panic!("expected resource fail for wonder");
         }
@@ -1225,15 +1330,14 @@ mod tests {
     fn wonder_stage_fails_if_coins_insufficient_for_trades() {
         let mut game = GameState::new(3);
         game.players[0].current_hand = vec!["lumber_yard".to_string()];
-        game.players[0].board.coins = 1; // low, will need 4 for 2 stone @2 each
-        // neighbor (left of 0 = p2) supplies 2 stone via two producers (for test)
-        game.players[2].board.played_cards = vec!["stone_pit".to_string(), "stone_pit".to_string()];
+        game.players[0].board.coins = 1; // low, will need 4 for 2 wood @2 each
+        game.players[2].board.played_cards = vec!["lumber_yard".to_string(), "lumber_yard".to_string()];
         let action = TerminalAction::BuildWonder {
             card_id: "lumber_yard".to_string(),
             stage: 1,
             trades: vec![
-                Trade { from: Neighbor::Left, resource: Resource::Stone },
-                Trade { from: Neighbor::Left, resource: Resource::Stone },
+                Trade { from: Neighbor::Left, resource: Resource::Wood },
+                Trade { from: Neighbor::Left, resource: Resource::Wood },
             ],
         };
         let res = game.submit_terminal_action(0, action);
@@ -1304,6 +1408,58 @@ mod tests {
     }
 
     #[test]
+    fn cannot_buy_resources_from_neighbor_caravansery_or_forum() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 10;
+        game.players[2].board.played_cards = vec!["caravansery".to_string()];
+        let caravansery_trade = TerminalAction::PlayCard {
+            card_id: "baths".to_string(),
+            trades: vec![Trade {
+                from: Neighbor::Left,
+                resource: Resource::Stone,
+            }],
+        };
+        expect_invalid(
+            game.submit_terminal_action(0, caravansery_trade),
+            "invalid trades",
+        );
+
+        let mut game2 = GameState::new(3);
+        game2.players[0].current_hand = vec!["workshop".to_string()];
+        game2.players[0].board.coins = 10;
+        game2.players[2].board.played_cards = vec!["forum".to_string()];
+        let forum_trade = TerminalAction::PlayCard {
+            card_id: "workshop".to_string(),
+            trades: vec![Trade {
+                from: Neighbor::Left,
+                resource: Resource::Glass,
+            }],
+        };
+        expect_invalid(
+            game2.submit_terminal_action(0, forum_trade),
+            "invalid trades",
+        );
+
+        // Other combo producers (e.g. forest_cave) remain tradeable.
+        let mut game3 = GameState::new(3);
+        game3.players[0].current_hand = vec!["barracks".to_string()];
+        game3.players[0].board.coins = 10;
+        game3.players[2].board.played_cards = vec!["forest_cave".to_string()];
+        let forest_cave_trade = TerminalAction::PlayCard {
+            card_id: "barracks".to_string(),
+            trades: vec![Trade {
+                from: Neighbor::Left,
+                resource: Resource::Ore,
+            }],
+        };
+        assert!(
+            game3.is_valid_terminal_action(0, &forest_cave_trade),
+            "forest_cave should still be tradeable"
+        );
+    }
+
+    #[test]
     fn cannot_purchase_both_options_from_combo_resource_card_in_one_turn() {
         let mut game = GameState::new(3);
         game.players[0].current_hand = vec!["workshop".to_string()]; // needs glass, but we'll use a stone/wood card for the combo test by using baths? use a play needing wood and stone? baths needs stone.
@@ -1371,6 +1527,57 @@ mod tests {
         assert!(game.players[1].board.defeat_tokens > 0);
         assert_eq!(game.last_age_battle_deltas[0].0, -1); // lost to left neighbor's stronger army
         assert_eq!(game.last_age_battle_deltas[0].1, 1);  // beat right neighbor
+    }
+
+    #[test]
+    fn military_battle_deltas_age1() {
+        assert_battle_deltas(
+            1,
+            [1, 2, 3],
+            [(-1, -1), (1, -1), (1, 1)],
+            "age1 [1,2,3]",
+        );
+        assert_battle_deltas(1, [2, 2, 2], [(0, 0), (0, 0), (0, 0)], "age1 [2,2,2]");
+        assert_battle_deltas(
+            1,
+            [0, 10, 0],
+            [(0, -1), (1, 1), (-1, 0)],
+            "age1 [0,10,0]",
+        );
+    }
+
+    #[test]
+    fn military_battle_deltas_age2() {
+        assert_battle_deltas(
+            2,
+            [2, 2, 5],
+            [(-1, 0), (0, -1), (3, 3)],
+            "age2 [2,2,5]",
+        );
+        assert_battle_deltas(
+            2,
+            [3, 4, 5],
+            [(-1, -1), (3, -1), (3, 3)],
+            "age2 [3,4,5]",
+        );
+        assert_battle_deltas(2, [2, 2, 2], [(0, 0), (0, 0), (0, 0)], "age2 [2,2,2]");
+    }
+
+    #[test]
+    fn military_battle_deltas_age3() {
+        assert_battle_deltas(
+            3,
+            [4, 5, 6],
+            [(-1, -1), (5, -1), (5, 5)],
+            "age3 [4,5,6]",
+        );
+        assert_battle_deltas(3, [2, 2, 2], [(0, 0), (0, 0), (0, 0)], "age3 [2,2,2]");
+        assert_battle_deltas(
+            3,
+            [7, 5, 7],
+            [(0, 5), (-1, -1), (5, 0)],
+            "age3 [7,5,7]",
+        );
     }
 
     #[test]
@@ -1666,7 +1873,7 @@ mod tests {
         let mut game = GameState::new(3);
         game.players[0].current_hand = vec!["lumber_yard".to_string()];
         game.players[0].board.coins = 10;
-        // Gizah A stage 1 costs 2 stone; no stone available
+        // Gizah A stage 1 costs 2 wood; no wood available
         let res = game.submit_terminal_action(
             0,
             TerminalAction::BuildWonder {

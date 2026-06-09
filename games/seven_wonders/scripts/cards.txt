@@ -64,7 +64,7 @@ School (school) | Green | [wood, paper] | +1 tablet | to academy, to study | [3,
 ### AGE 3
 Pantheon (pantheon) | Blue | [brick, brick, ore, glass, paper, cloth] | +7 points | from altar | [3, 6]
 Gardens (gardens) | Blue | [brick, brick, wood] | +5 points | from theater | [3, 4]
-Senate (senate) | Blue | [wood, wood, stone, ore] | +6 points | from university | [3, 5]
+Senate (senate) | Blue | [wood, wood, stone, ore] | +6 points | from library | [3, 5]
 Town Hall (town_hall) | Blue | [stone, stone, stone, glass] | +6 points | None | [3, 6]
 Palace (palace) | Blue | [wood, stone, ore, brick, glass, paper, cloth] | +8 points | None | [3, 7]
 Lighthouse (lighthouse) | Yellow | [stone, glass] | +1 coin and +1 point for each yellow card you have | from caravansery | [3, 6]

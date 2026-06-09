@@ -24,8 +24,9 @@ fn main() -> Result<()> {
             player_count,
             players,
             rounds,
+            publish,
         } => {
-            runner::run_seven_wonders(player_count, &players, rounds)?;
+            runner::run_seven_wonders(player_count, &players, rounds, publish)?;
         }
         cli::Commands::Publish { model, benchmark } => {
             runner::publish_latest(&model, &benchmark)?;

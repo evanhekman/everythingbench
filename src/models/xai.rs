@@ -36,19 +36,32 @@ impl XaiClient {
     }
 
     pub fn complete(&self, model: &str, prompt: &str, system: Option<&str>, max_tokens: Option<u32>) -> Result<(String, u64)> {
+        let mut messages = vec![];
+        if let Some(sys) = system {
+            messages.push((String::from("system"), sys.to_string()));
+        }
+        messages.push((String::from("user"), prompt.to_string()));
+        self.complete_with_messages(model, &messages, max_tokens)
+    }
+
+    /// Multi-turn chat: each `(role, content)` pair is sent in order (e.g. system, user, assistant, user, …).
+    pub fn complete_with_messages(
+        &self,
+        model: &str,
+        messages: &[(String, String)],
+        max_tokens: Option<u32>,
+    ) -> Result<(String, u64)> {
         let start = Instant::now();
 
-        let mut messages = vec![];
-
-        if let Some(sys) = system {
-            messages.push(serde_json::json!({ "role": "system", "content": sys }));
-        }
-        messages.push(serde_json::json!({ "role": "user", "content": prompt }));
+        let api_messages: Vec<_> = messages
+            .iter()
+            .map(|(role, content)| serde_json::json!({ "role": role, "content": content }))
+            .collect();
 
         let mt = max_tokens.unwrap_or(32);
         let body = serde_json::json!({
             "model": model,
-            "messages": messages,
+            "messages": api_messages,
             "temperature": 0.0,
             "max_tokens": mt,
         });

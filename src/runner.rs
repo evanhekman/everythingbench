@@ -1,10 +1,16 @@
 use crate::config::validate_model;
 use crate::games::bullshit_dict::BullshitDict;
 use crate::models::xai::XaiClient;
-use crate::results::{RunConfig, RunResult, Summary, TrialResult};
+use crate::games::seven_wonders::SevenWondersGameOutcome;
+use crate::results::{
+    build_seven_wonders_run_result, next_run_number, raw_dir, seven_wonders_run_model,
+    LlmSeatStats, PersistableRun, RunConfig, RunResult, Summary, TrialResult,
+    SEVEN_WONDERS_BENCHMARK,
+};
 use anyhow::{bail, Result};
 use chrono::Utc;
-use std::fs;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Run Seven Wonders with per-seat player types.
 ///
@@ -17,6 +23,7 @@ pub fn run_seven_wonders(
     player_count: u8,
     player_specs: &[String],
     max_rounds: Option<u32>,
+    publish: bool,
 ) -> Result<()> {
     if player_specs.len() != player_count as usize {
         bail!(
@@ -31,7 +38,8 @@ pub fn run_seven_wonders(
         controller::PlayerController, FirstPurchaseableController, GameState, HumanLogController,
         LLMController, run_game, run_limited_rounds_game, term,
     };
-
+    let mut llm_stats: Vec<Option<Rc<RefCell<LlmSeatStats>>>> =
+        vec![None; player_count as usize];
     let mut controllers: Vec<Box<dyn PlayerController>> = Vec::with_capacity(player_count as usize);
 
     for (i, spec) in player_specs.iter().enumerate() {
@@ -42,7 +50,9 @@ pub fn run_seven_wonders(
             "human" => Box::new(HumanLogController::as_human(format!("player {}", i))),
             model => {
                 validate_model(model)?;
-                Box::new(LLMController::new(model.to_string()))
+                let stats = Rc::new(RefCell::new(LlmSeatStats::default()));
+                llm_stats[i] = Some(stats.clone());
+                Box::new(LLMController::with_stats(model.to_string(), Some(stats)))
             }
         };
         controllers.push(controller);
@@ -61,14 +71,70 @@ pub fn run_seven_wonders(
     }
 
     let game = GameState::new(player_count);
-    for (p, controller) in controllers.iter().enumerate() {
+    for (p, controller) in controllers.iter_mut().enumerate() {
         controller.print_startup_context(&game, p);
     }
 
-    match max_rounds {
+    let outcome = match max_rounds {
         Some(n) => run_limited_rounds_game(controllers, n),
         None => run_game(controllers),
+    };
+
+    write_seven_wonders_results(
+        &seven_wonders_run_model(player_specs),
+        player_specs,
+        max_rounds,
+        &outcome,
+        &llm_stats,
+        publish,
+    )?;
+
+    Ok(())
+}
+
+fn write_seven_wonders_results(
+    model: &str,
+    player_specs: &[String],
+    max_rounds: Option<u32>,
+    outcome: &SevenWondersGameOutcome,
+    llm_stats: &[Option<Rc<RefCell<LlmSeatStats>>>],
+    publish: bool,
+) -> Result<()> {
+    let scores: Vec<_> = if let Some(scores) = &outcome.final_scores {
+        scores.clone()
+    } else {
+        vec![Default::default(); player_specs.len()]
+    };
+
+    let stats_snapshot: Vec<Option<LlmSeatStats>> = llm_stats
+        .iter()
+        .map(|opt| opt.as_ref().map(|s| s.borrow().clone()))
+        .collect();
+
+    let result = build_seven_wonders_run_result(
+        model.to_string(),
+        player_specs,
+        max_rounds,
+        outcome.rounds_played,
+        outcome.game_complete,
+        outcome.player_count,
+        &scores,
+        &stats_snapshot,
+    )?;
+
+    result.write_raw()?;
+
+    if publish {
+        result.publish_to_site()?;
     }
+
+    println!(
+        "\nLogged Seven Wonders run #{} for {} → results/raw/grok/{}/{}/",
+        result.run_number,
+        model,
+        model,
+        SEVEN_WONDERS_BENCHMARK
+    );
 
     Ok(())
 }
@@ -101,9 +167,8 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
 
     let client = XaiClient::new()?;
 
-    // Determine next run number from the *raw* directory
-    let raw_dir = format!("results/raw/grok/{}/{}", model, benchmark);
-    let next_run = get_next_run_number(&raw_dir)?;
+    let raw_dir = raw_dir(crate::results::DEFAULT_PROVIDER, model, benchmark);
+    let next_run = next_run_number(&raw_dir)?;
 
     println!("Starting run #{} for model {} on {}", next_run, model, benchmark);
 
@@ -121,14 +186,12 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
 
         let (raw_response, latency_ms) = client.complete(model, &user_prompt, None, None)?;
 
-        // Very simple parsing: look for yes or no (case insensitive)
         let cleaned = raw_response.trim().to_lowercase();
         let parsed_answer = if cleaned.contains("yes") {
             "yes".to_string()
         } else if cleaned.contains("no") {
             "no".to_string()
         } else {
-            // Fallback: take first word
             cleaned.split_whitespace().next().unwrap_or("unknown").to_string()
         };
 
@@ -155,7 +218,7 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
         run_number: next_run,
         model: model.to_string(),
         benchmark: benchmark.to_string(),
-        provider: "grok".to_string(),
+        provider: crate::results::DEFAULT_PROVIDER.to_string(),
         timestamp: Utc::now(),
         config: RunConfig {
             temperature: 0.0,
@@ -169,7 +232,6 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
         },
     };
 
-    // Always write raw + update latest.json
     result.write_raw()?;
 
     if publish {
@@ -188,26 +250,4 @@ pub fn run_benchmark(model: &str, benchmark: &str, publish: bool) -> Result<()> 
 
 pub fn publish_latest(model: &str, benchmark: &str) -> Result<()> {
     crate::results::publish_latest_raw(model, benchmark)
-}
-
-fn get_next_run_number(raw_dir: &str) -> Result<u32> {
-    fs::create_dir_all(raw_dir)?;
-
-    let mut max_num = 0u32;
-
-    for entry in fs::read_dir(raw_dir)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-
-        if let Some(num_str) = name.strip_suffix(".json") {
-            if let Ok(num) = num_str.parse::<u32>() {
-                if num > max_num {
-                    max_num = num;
-                }
-            }
-        }
-    }
-
-    Ok(max_num + 1)
 }

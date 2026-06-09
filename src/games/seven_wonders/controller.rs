@@ -3,7 +3,10 @@
 use super::actions::{SevenWondersAction, TerminalAction};
 use super::state::GameState;
 use super::term;
+use crate::results::LlmSeatStats;
+use std::cell::RefCell;
 use std::io::{self, Write};
+use std::rc::Rc;
 
 const PROMPTS_DIR: &str = "games/seven_wonders/prompts";
 
@@ -166,8 +169,8 @@ pub trait PlayerController {
     /// Returns the chosen terminal action (or observe for humans).
     fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction;
 
-    /// Print static prompt files once before the first round (`human-agent` only).
-    fn print_startup_context(&self, _game: &GameState, _player: usize) {}
+    /// Print static prompt files once before the first round (LLM / `human-agent`).
+    fn print_startup_context(&mut self, _game: &GameState, _player: usize) {}
 }
 
 /// Simple human controller via terminal.
@@ -269,12 +272,54 @@ impl PlayerController for HumanController {
 pub struct LLMController {
     pub model: String,
     client: Option<crate::models::xai::XaiClient>,
+    stats: Option<Rc<RefCell<LlmSeatStats>>>,
+    /// Conversation history: system + static user body seeded at startup; each turn appends log + assistant reply.
+    messages: Vec<(String, String)>,
+    /// True when the latest user message is for the current decision and has no assistant reply yet (retry updates it).
+    pending_turn_user: bool,
 }
 
 impl LLMController {
     pub fn new(model: String) -> Self {
+        Self::with_stats(model, None)
+    }
+
+    pub fn with_stats(model: String, stats: Option<Rc<RefCell<LlmSeatStats>>>) -> Self {
         let client = crate::models::xai::XaiClient::new().ok();
-        Self { model, client }
+        Self {
+            model,
+            client,
+            stats,
+            messages: Vec::new(),
+            pending_turn_user: false,
+        }
+    }
+
+    fn seed_conversation(&mut self, game: &GameState, player: usize) {
+        self.messages = vec![
+            (
+                String::from("system"),
+                system_prompt_text(),
+            ),
+            (
+                String::from("user"),
+                human_agent_static_user_body(game, player),
+            ),
+        ];
+        self.pending_turn_user = false;
+    }
+
+    fn push_or_update_turn_user(&mut self, content: String) {
+        if self.pending_turn_user {
+            if let Some(last) = self.messages.last_mut() {
+                if last.0 == "user" {
+                    last.1 = content;
+                    return;
+                }
+            }
+        }
+        self.messages.push((String::from("user"), content));
+        self.pending_turn_user = true;
     }
 }
 
@@ -287,6 +332,16 @@ impl PlayerController for LLMController {
         true
     }
 
+    fn print_startup_context(&mut self, game: &GameState, player: usize) {
+        self.seed_conversation(game, player);
+        term::print_human_agent_startup_context(
+            game,
+            player,
+            &system_prompt_text(),
+            &human_agent_static_user_body(game, player),
+        );
+    }
+
     fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction {
         let view = game.view_for_player(player);
         let hand = &view.hand;
@@ -297,38 +352,41 @@ impl PlayerController for LLMController {
             return fallback;
         }
 
-        // Build the prompt from the external prompt files + the dynamic log view.
-        // system_prompt.txt is passed as the system message.
-        // The user message combines agent.txt + cards.txt + user.txt (placeholder) + current log context.
-        let system_prompt = load_prompt_file("system_prompt.txt");
+        if self.messages.is_empty() {
+            self.seed_conversation(game, player);
+        }
 
-        let user_prompt = if let Some(view) = log_view {
-            format!(
-                "{}\n\nOutput exactly one action line:",
-                build_decision_context(game, player, view, true)
-            )
+        let turn_prompt = if let Some(view) = log_view {
+            build_turn_user_message(player, view)
         } else {
-            // Legacy fallback (no log view supplied)
             format!(
                 "You are playing 7 Wonders as player {}. Current hand: {:?}. Coins: {}. Choose one action: play <card>, wonder <card>, or burn <card>. Output only the action like 'play workshop' or 'burn theater'.",
                 player, hand, view.coins
             )
         };
 
-        // For visibility of exactly what the agent receives (as requested).
-        // We show the composed user prompt + note that system_prompt.txt was also sent.
         if log_view.is_some() {
-            println!("=== SYSTEM PROMPT (from system_prompt.txt) ===\n{}\n=== END SYSTEM ===", system_prompt);
-            println!("=== FULL USER PROMPT SENT TO PLAYER {} (agent.txt + cards.txt + user.txt + log view) ===\n{}\n=== END USER PROMPT ===", player, user_prompt);
+            term::print_llm_turn_context(game, player, log_view.unwrap());
         }
 
         let mut decided: Option<SevenWondersAction> = None;
+        let max_toks = if log_view.is_some() { Some(80) } else { None };
 
-        if let Some(client) = &self.client {
-            // Use higher max_tokens when we have a log view (response is still short, but safer).
-            let max_toks = if log_view.is_some() { Some(80) } else { None };
-            match client.complete(&self.model, &user_prompt, Some(&system_prompt), max_toks) {
+        if self.client.is_some() {
+            self.push_or_update_turn_user(turn_prompt);
+        }
+
+        if let Some(client) = self.client.as_ref() {
+            match client.complete_with_messages(&self.model, &self.messages, max_toks) {
                 Ok((response, latency_ms)) => {
+                    self.messages
+                        .push((String::from("assistant"), response.clone()));
+                    self.pending_turn_user = false;
+                    if let Some(stats) = &self.stats {
+                        let mut s = stats.borrow_mut();
+                        s.decisions += 1;
+                        s.total_latency_ms += latency_ms;
+                    }
                     println!("[LLM p{}] raw ({}ms): {}", player, latency_ms, response);
                     let chosen = parse_agent_action_line(&response, hand, view.wonder_stages_built)
                         .or_else(|| {
@@ -346,14 +404,31 @@ impl PlayerController for LLMController {
                         println!("[LLM p{}] parsed: {:?}", player, action);
                         decided = Some(action);
                     } else {
+                        if let Some(stats) = &self.stats {
+                            stats.borrow_mut().parse_failures += 1;
+                        }
                         println!("[LLM p{}] unparsed '{}', fallback", player, response.trim());
                     }
                 }
                 Err(e) => {
+                    if self.pending_turn_user {
+                        self.messages.pop();
+                        self.pending_turn_user = false;
+                    }
+                    if let Some(stats) = &self.stats {
+                        stats.borrow_mut().api_errors += 1;
+                    }
                     println!("[LLM p{}] API error: {}. fallback", player, e);
                 }
             }
         } else {
+            if self.pending_turn_user {
+                self.messages.pop();
+                self.pending_turn_user = false;
+            }
+            if let Some(stats) = &self.stats {
+                stats.borrow_mut().api_errors += 1;
+            }
             println!("[LLM p{}] no API client, fallback", player);
         }
 
@@ -368,35 +443,28 @@ impl PlayerController for LLMController {
     }
 }
 
-/// Static portion of the LLM user message (agent + cards + user.txt), without log.
-pub(crate) fn human_agent_static_user_body(game: &GameState) -> String {
+/// Static portion of the LLM user message (agent + cards + user.txt + wonder overview), without log.
+pub(crate) fn human_agent_static_user_body(game: &GameState, player: usize) -> String {
     let agent_txt = load_prompt_file("agent.txt");
     let cards_txt = load_cards_for_players(game.player_count);
     let user_txt = load_prompt_file("user.txt");
-    format!("{agent_txt}\n\n{cards_txt}\n\n{user_txt}")
+    let wonder = game.format_wonder_stages_overview(player);
+    format!("{agent_txt}\n\n{cards_txt}\n\n{user_txt}\n\n{wonder}")
+}
+
+fn print_wonder_startup(game: &GameState, player: usize) {
+    term::print_wonder_startup_context(game, player);
 }
 
 pub(crate) fn system_prompt_text() -> String {
     load_prompt_file("system_prompt.txt")
 }
 
-/// Build the user-message body shown to a deciding player.
-/// `full_agent_context`: include agent.txt + cards list (same as LLM user message).
-fn build_decision_context(game: &GameState, player: usize, log_view: &str, full_agent_context: bool) -> String {
-    let user_txt = load_prompt_file("user.txt");
-    if full_agent_context {
-        format!(
-            "{}\n\nCurrent log context for your decision (player {}):\n{}\n",
-            human_agent_static_user_body(game),
-            player,
-            log_view
-        )
-    } else {
-        format!(
-            "{}\n\nCurrent log context for your decision (player {}):\n{}\n",
-            user_txt, player, log_view
-        )
-    }
+/// Per-turn user message: log slice only (static prompts were sent at startup).
+pub(crate) fn build_turn_user_message(player: usize, log_view: &str) -> String {
+    format!(
+        "Current log context for your decision (player {player}):\n{log_view}\n\nOutput exactly one action line:"
+    )
 }
 
 /// Human at the terminal with log-based play.
@@ -431,14 +499,16 @@ impl PlayerController for HumanLogController {
         true
     }
 
-    fn print_startup_context(&self, game: &GameState, player: usize) {
+    fn print_startup_context(&mut self, game: &GameState, player: usize) {
         if self.full_agent_context {
             term::print_human_agent_startup_context(
                 game,
                 player,
                 &system_prompt_text(),
-                &human_agent_static_user_body(game),
+                &human_agent_static_user_body(game, player),
             );
+        } else {
+            print_wonder_startup(game, player);
         }
     }
 

@@ -130,6 +130,9 @@ fn colorize_log_line(game: &GameState, player: usize, line: &str) -> String {
     if trimmed.starts_with("your_production:")
         || trimmed.starts_with("left (Player")
         || trimmed.starts_with("right (Player")
+        || trimmed.starts_with("wonder stages")
+        || trimmed.starts_with("wonder\t")
+        || trimmed.starts_with("wonder ")
     {
         return gray(trimmed);
     }
@@ -187,6 +190,12 @@ pub fn print_decision_screen(
     print_body_lines(game, player, log_view);
 }
 
+/// Wonder stage overview printed once at game start (`human` players).
+pub fn print_wonder_startup_context(game: &GameState, player: usize) {
+    println!("{}", gray(&game.format_wonder_stages_overview(player)));
+    println!();
+}
+
 /// Static agent context printed once before the first round (`human-agent`).
 pub fn print_human_agent_startup_context(
     game: &GameState,
@@ -204,6 +213,18 @@ pub fn print_human_agent_startup_context(
     );
     print_body_lines(game, player, static_user_body);
     println!("{}", gray("=== END USER PROMPT (static) ===\n"));
+}
+
+/// Per-turn log slice for LLM agents (static prompts already shown at startup).
+pub fn print_llm_turn_context(game: &GameState, player: usize, log_view: &str) {
+    println!(
+        "{}",
+        gray(&format!(
+            "=== LOG CONTEXT SENT TO PLAYER {player} (this turn only) ==="
+        ))
+    );
+    print_body_lines(game, player, log_view);
+    println!("{}", gray("=== END LOG CONTEXT ===\n"));
 }
 
 /// Per-turn log slice for `human-agent` (static prompts already shown at startup).

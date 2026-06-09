@@ -8,8 +8,12 @@ pub const KNOWN_MODELS: &[&str] = &[
     // Add more as we validate them
 ];
 
+pub fn is_known_model(model: &str) -> bool {
+    KNOWN_MODELS.contains(&model)
+}
+
 pub fn validate_model(model: &str) -> Result<()> {
-    if KNOWN_MODELS.contains(&model) {
+    if is_known_model(model) {
         Ok(())
     } else {
         bail!(
