@@ -38,25 +38,40 @@ fn parse_resource(s: &str) -> Option<super::types::Resource> {
     }
 }
 
-fn parse_trades(tail: &str) -> Vec<super::types::Trade> {
-    use super::types::{Neighbor, Trade};
-    let mut out = vec![];
-    for tok in tail.split_whitespace() {
-        let t = tok.to_lowercase();
-        let (side_part, res_part) = if let Some(p) = t.split_once(':') { p } else { continue };
-        let neigh = match side_part {
-            "left" | "l" => Neighbor::Left,
-            "right" | "r" => Neighbor::Right,
-            _ => continue,
-        };
-        if res_part.contains(':') {
-            continue;
-        }
-        if let Some(res) = parse_resource(res_part) {
-            out.push(Trade { from: neigh, resource: res });
+fn parse_neighbor(s: &str) -> Option<super::types::Neighbor> {
+    use super::types::Neighbor;
+    match s {
+        "left" | "l" => Some(Neighbor::Left),
+        "right" | "r" => Some(Neighbor::Right),
+        _ => None,
+    }
+}
+
+/// Parse `left:wood` / `right:stone` (preferred) or `wood:left` / `stone:right`.
+fn parse_trade_token(tok: &str) -> Option<super::types::Trade> {
+    use super::types::Trade;
+    let t = tok.to_lowercase();
+    let (a, b) = t.split_once(':')?;
+    if b.contains(':') {
+        return None;
+    }
+    if let Some(neigh) = parse_neighbor(a) {
+        if let Some(res) = parse_resource(b) {
+            return Some(Trade { from: neigh, resource: res });
         }
     }
-    out
+    if let Some(res) = parse_resource(a) {
+        if let Some(neigh) = parse_neighbor(b) {
+            return Some(Trade { from: neigh, resource: res });
+        }
+    }
+    None
+}
+
+fn parse_trades(tail: &str) -> Vec<super::types::Trade> {
+    tail.split_whitespace()
+        .filter_map(|tok| parse_trade_token(tok))
+        .collect()
 }
 
 fn expand_action_shorthand(s: &str) -> String {
@@ -517,5 +532,24 @@ mod tests {
             SevenWondersAction::Terminal(TerminalAction::BurnCard { ref card_id })
                 if card_id == "lumber_yard"
         ));
+    }
+
+    #[test]
+    fn parse_trades_accepts_dir_resource_and_resource_dir() {
+        use crate::games::seven_wonders::types::{Neighbor, Resource};
+
+        let dir_first = parse_trades("play archery_range left:wood right:wood left:ore");
+        assert_eq!(dir_first.len(), 3);
+        assert_eq!(dir_first[0].from, Neighbor::Left);
+        assert_eq!(dir_first[0].resource, Resource::Wood);
+
+        let res_first = parse_trades("play archery_range wood:right wood:left ore:left");
+        assert_eq!(res_first.len(), 3);
+        assert_eq!(res_first[0].from, Neighbor::Right);
+        assert_eq!(res_first[0].resource, Resource::Wood);
+        assert_eq!(res_first[1].from, Neighbor::Left);
+        assert_eq!(res_first[1].resource, Resource::Wood);
+        assert_eq!(res_first[2].from, Neighbor::Left);
+        assert_eq!(res_first[2].resource, Resource::Ore);
     }
 }

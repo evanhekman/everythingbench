@@ -1600,6 +1600,48 @@ mod tests {
     }
 
     #[test]
+    fn archery_range_valid_with_trades_from_both_neighbors() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["archery_range".to_string()];
+        game.players[0].board.coins = 12;
+        // right (P1): glass, wood, ore/brick
+        game.players[1].board.played_cards =
+            vec!["glassworks".to_string(), "lumber_yard".to_string(), "clay_pit".to_string()];
+        // left (P2): stone, cloth, ore, wood/stone
+        game.players[2].board.played_cards = vec![
+            "stone_pit".to_string(),
+            "loom".to_string(),
+            "ore_vein".to_string(),
+            "timber_yard".to_string(),
+        ];
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "archery_range".to_string(),
+                trades: vec![
+                    Trade {
+                        from: Neighbor::Right,
+                        resource: Resource::Wood,
+                    },
+                    Trade {
+                        from: Neighbor::Left,
+                        resource: Resource::Wood,
+                    },
+                    Trade {
+                        from: Neighbor::Left,
+                        resource: Resource::Ore,
+                    },
+                ],
+            },
+        );
+        assert!(
+            matches!(res, ActionResult::Success { .. }),
+            "archery_range with neighbor trades: {:?}",
+            res
+        );
+    }
+
+    #[test]
     fn play_fails_when_trading_from_wrong_neighbor() {
         let mut game = GameState::new(3);
         // p0 right neighbor is p1; stone only on p1
