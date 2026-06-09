@@ -5,7 +5,7 @@ use super::state::GameState;
 use super::term;
 use crate::results::LlmSeatStats;
 use std::cell::RefCell;
-use std::io::{self, Write};
+use std::io;
 use std::rc::Rc;
 
 const PROMPTS_DIR: &str = "games/seven_wonders/prompts";
@@ -156,13 +156,6 @@ pub trait PlayerController {
         ControllerDecisionMode::Auto
     }
 
-    /// Whether this controller wants a rich log context string (instead of / in addition to raw GameState).
-    /// LLM controllers return true so the runner supplies the personalized plain-text log view.
-    /// Autos and humans return false and continue to drive directly from GameState (autos unchanged per spec).
-    fn prefers_log_context(&self) -> bool {
-        false
-    }
-
     /// Run the decision loop for the player.
     /// `log_view`: when Some, this is the (personalized) log prefix + open decision block for this player.
     ///   Only LLM impls use it as their prompt content. Others may ignore it.
@@ -171,98 +164,6 @@ pub trait PlayerController {
 
     /// Print static prompt files once before the first round (LLM / `human-agent`).
     fn print_startup_context(&mut self, _game: &GameState, _player: usize) {}
-}
-
-/// Simple human controller via terminal.
-/// Uses the same tool/action loop.
-pub struct HumanController {
-    pub name: String,
-}
-
-impl HumanController {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
-}
-
-impl PlayerController for HumanController {
-    fn decide_action(&mut self, game: &GameState, player: usize, _log_view: Option<&str>) -> SevenWondersAction {
-        println!("\n=== {}'s turn (player {}) ===", self.name, player);
-        let view = game.view_for_player(player);
-        println!("Hand: {:?}", view.hand);
-        println!("Coins: {}", view.coins);
-        println!("Wonder stages: {}", view.wonder_stages_built);
-
-        loop {
-            println!("Choose: (o)bserve <tool>, (p)lay <card> [trades], (w)onder <card>, (b)urn <card>, (h)elp");
-            print!("> ");
-            io::stdout().flush().unwrap();
-
-            let mut input = String::new();
-            io::stdin().read_line(&mut input).unwrap();
-            let input = input.trim().to_lowercase();
-
-            if input == "h" || input == "help" {
-                println!("Tools: mycards, allcards, myresources, allresources, allmilitary, civilizations, mywonder, wonders, ageturn");
-                println!("Actions: play <cardid> [e.g. left:wood], wonder <cardid>, burn <cardid>");
-                continue;
-            }
-
-            if input.starts_with("o ") || input.starts_with("observe ") {
-                let tool = input.split_whitespace().nth(1).unwrap_or("").to_lowercase();
-                match tool.as_str() {
-                    "mycards" => {
-                        println!("Your played: {:?}", game.check_my_cards(player));
-                    }
-                    "allcards" => {
-                        println!("All played (simplified view)");
-                    }
-                    "myc oins" | "myresources" => {
-                        println!("Your coins: {}", game.check_my_coins(player));
-                    }
-                    "ageturn" => {
-                        println!("Age: {}, Round: {}", game.current_age, game.round_in_age);
-                    }
-                    _ => println!("Unknown tool or not implemented: {}", tool),
-                }
-                continue;
-            }
-
-            // Terminal actions
-            let parts: Vec<&str> = input.split_whitespace().collect();
-            if parts.is_empty() {
-                continue;
-            }
-            let cmd = parts[0];
-            if cmd == "play" || cmd == "p" {
-                if parts.len() < 2 {
-                    println!("play <cardid>");
-                    continue;
-                }
-                let card = parts[1].to_string();
-                return SevenWondersAction::Terminal(TerminalAction::PlayCard { card_id: card, trades: vec![] });
-            }
-            if cmd == "wonder" || cmd == "w" {
-                if parts.len() != 2 {
-                    println!("wonder <cardid>   (exactly one card id; stage is always the next one)");
-                    continue;
-                }
-                let card = parts[1].to_string();
-                let stage: u8 = game.view_for_player(player).wonder_stages_built + 1;
-                return SevenWondersAction::Terminal(TerminalAction::BuildWonder { card_id: card, stage, trades: vec![] });
-            }
-            if cmd == "burn" {
-                if parts.len() < 2 {
-                    println!("burn <cardid>");
-                    continue;
-                }
-                let card = parts[1].to_string();
-                return SevenWondersAction::Terminal(TerminalAction::BurnCard { card_id: card });
-            }
-
-            println!("Unknown");
-        }
-    }
 }
 
 /// LLM controller using the xAI API.
@@ -280,10 +181,6 @@ pub struct LLMController {
 }
 
 impl LLMController {
-    pub fn new(model: String) -> Self {
-        Self::with_stats(model, None)
-    }
-
     pub fn with_stats(model: String, stats: Option<Rc<RefCell<LlmSeatStats>>>) -> Self {
         let client = crate::models::xai::XaiClient::new().ok();
         Self {
@@ -326,10 +223,6 @@ impl LLMController {
 impl PlayerController for LLMController {
     fn decision_mode(&self) -> ControllerDecisionMode {
         ControllerDecisionMode::LlmAgent
-    }
-
-    fn prefers_log_context(&self) -> bool {
-        true
     }
 
     fn print_startup_context(&mut self, game: &GameState, player: usize) {
@@ -493,10 +386,6 @@ impl HumanLogController {
 impl PlayerController for HumanLogController {
     fn decision_mode(&self) -> ControllerDecisionMode {
         ControllerDecisionMode::InteractiveHuman
-    }
-
-    fn prefers_log_context(&self) -> bool {
-        true
     }
 
     fn print_startup_context(&mut self, game: &GameState, player: usize) {

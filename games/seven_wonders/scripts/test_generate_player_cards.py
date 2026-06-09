@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent / "generate_player_cards.py"
-PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
+SCRIPT_DIR = Path(__file__).resolve().parent
+CARDS_TXT = SCRIPT_DIR / "cards.txt"
+PROMPTS = SCRIPT_DIR.parent / "prompts"
 
 
 def load_module():
@@ -41,7 +43,7 @@ class TestThresholdLogic(unittest.TestCase):
 class TestGeneratedFiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.text = (PROMPTS / "cards.txt").read_text()
+        cls.text = CARDS_TXT.read_text()
         cls.preamble, cls.ages, cls.guild_cards = gen.parse_cards_txt(cls.text)
 
     def _age_totals(self, players: int) -> list[int]:

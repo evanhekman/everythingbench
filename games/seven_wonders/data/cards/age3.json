@@ -57,7 +57,7 @@
     "effect": {
       "points": 6
     },
-    "chain_from": "university",
+    "chain_from": "library",
     "chain_to": []
   },
   {

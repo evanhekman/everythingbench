@@ -113,7 +113,7 @@ fn colorize_hand_detail_line(game: &GameState, line: &str) -> Option<String> {
     ))
 }
 
-fn colorize_log_line(game: &GameState, player: usize, line: &str) -> String {
+fn colorize_log_line(game: &GameState, _player: usize, line: &str) -> String {
     let trimmed = line.trim_end();
     if trimmed.is_empty() {
         return String::new();

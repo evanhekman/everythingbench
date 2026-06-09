@@ -13,7 +13,6 @@ use std::fs;
 #[derive(Debug, Clone, Deserialize)]
 struct RawCardData {
     pub id: String,
-    pub name: String,
     pub age: u8,
     pub color: String,
     #[serde(default)]
@@ -24,8 +23,6 @@ struct RawCardData {
     pub effect: serde_json::Value,
     #[serde(default)]
     pub chain_from: Option<serde_json::Value>,
-    #[serde(default)]
-    pub chain_to: Vec<String>,
 }
 
 /// Parse a resource name from JSON keys.
@@ -174,29 +171,17 @@ impl CardDatabase {
 
         Card {
             id: raw.id,
-            name: raw.name,
             age: raw.age,
             color: raw.color,
             player_count: raw.player_count,
             cost,
             effect,
             chain_from: raw.chain_from,
-            chain_to: raw.chain_to,
         }
     }
 
     pub fn get(&self, id: &str) -> Option<&Card> {
         self.cards.get(id)
-    }
-
-    /// Returns all card IDs for a given age (1, 2, or 3).
-    pub fn cards_for_age(&self, age: u8) -> &[String] {
-        self.by_age.get(&age).map(|v| v.as_slice()).unwrap_or(&[])
-    }
-
-    /// Internal for now: access to by_age map (used by GameState setup).
-    pub(crate) fn by_age(&self) -> &HashMap<u8, Vec<String>> {
-        &self.by_age
     }
 
     /// Returns the list of card ids for the age, with multiplicity based on player_count for the given N players.
@@ -237,12 +222,6 @@ impl CardDatabase {
                 }
             })
             .collect()
-    }
-
-    /// One aligned hand line (single-card widths).
-    pub fn format_hand_entry(&self, card_id: &str) -> String {
-        let rows = self.hand_display_rows(&[card_id.to_string()]);
-        self.format_hand_rows(&rows)
     }
 
     /// Multiline hand block for logs and prompts.

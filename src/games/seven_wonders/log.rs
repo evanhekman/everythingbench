@@ -142,11 +142,6 @@ impl GameLog {
     pub fn write_to_disk(&self) {
         let _ = fs::write("log.txt", &self.full);
     }
-
-    /// Convenience: return current full for console printing / debugging.
-    pub fn full_as_str(&self) -> &str {
-        &self.full
-    }
 }
 
 /// Replace "Player N" with "Player N (you)" for the viewing player.

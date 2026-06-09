@@ -134,7 +134,7 @@ def main() -> int:
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path(__file__).resolve().parent.parent / "prompts" / "cards.txt",
+        default=Path(__file__).resolve().parent / "cards.txt",
     )
     parser.add_argument(
         "--output-dir",

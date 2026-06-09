@@ -39,10 +39,6 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn new() -> Self {
-        Self { counts: HashMap::new() }
-    }
-
     pub fn add(&mut self, resource: Resource, amount: u8) {
         *self.counts.entry(resource).or_insert(0) += amount;
     }
@@ -51,6 +47,7 @@ impl Resources {
         *self.counts.get(&resource).unwrap_or(&0)
     }
 
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.counts.values().all(|&c| c == 0)
     }
@@ -140,7 +137,6 @@ pub struct Cost {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Card {
     pub id: String,
-    pub name: String,
     pub age: u8,
     pub color: String,
     #[serde(default)]
@@ -151,6 +147,4 @@ pub struct Card {
     pub effect: Effect,
     #[serde(default)]
     pub chain_from: Option<serde_json::Value>, // can be string or array for "or"
-    #[serde(default)]
-    pub chain_to: Vec<String>,
 }

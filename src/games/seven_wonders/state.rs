@@ -4,6 +4,7 @@
 
 use super::actions::{ActionResult, SevenWondersAction, TerminalAction, Trade, Neighbor};
 use super::cards::CardDatabase;
+use super::log::GameLog;
 use super::wonders::{format_wonder_current_stage, format_wonder_stages_overview, stage_def, stage_to_cost};
 use super::scoring::{self, ScoreBreakdown};
 use super::types::{Cost, DiscountType, Effect, Resource, Resources};
@@ -24,7 +25,6 @@ pub struct PlayerBoard {
 /// Full state for one player from the engine's perspective.
 #[derive(Debug, Clone)]
 pub struct PlayerState {
-    pub id: usize,
     pub board: PlayerBoard,
     pub current_hand: Vec<String>,   // card ids currently in hand
 }
@@ -55,9 +55,8 @@ impl GameState {
         let card_db = CardDatabase::load();
 
         let mut players = Vec::with_capacity(player_count as usize);
-        for i in 0..player_count {
+        for _ in 0..player_count {
             players.push(PlayerState {
-                id: i as usize,
                 board: PlayerBoard {
                     wonder_id: "gizah_a".to_string(),
                     wonder_stages_built: 0,
@@ -142,6 +141,7 @@ impl GameState {
     }
 
     /// Returns the current hand of the given player (card ids).
+    #[cfg(test)]
     pub fn get_hand(&self, player: usize) -> &[String] {
         &self.players[player].current_hand
     }
@@ -151,20 +151,16 @@ impl GameState {
     pub fn view_for_player(&self, player: usize) -> PlayerView {
         let p = &self.players[player];
         PlayerView {
-            player_id: player,
             hand: p.current_hand.clone(),
-            played_cards: p.board.played_cards.clone(),
             coins: p.board.coins,
             wonder_stages_built: p.board.wonder_stages_built,
-            wonder_id: p.board.wonder_id.clone(),
-            military_tokens: p.board.defeat_tokens as i8,
-            // For now, minimal. We will expand observation tools to return richer views.
         }
     }
 
     /// Attempts to play a card from the player's hand.
     /// Currently very minimal — just removes the card from hand and records it as played.
     /// Full cost, chaining, and trading logic comes later.
+    #[cfg(test)]
     pub fn play_card(&mut self, player: usize, card_id: &str) -> Result<(), String> {
         let hand = &mut self.players[player].current_hand;
         if let Some(pos) = hand.iter().position(|c| c == card_id) {
@@ -178,6 +174,7 @@ impl GameState {
 
     /// Attempts to use a card from hand to build a wonder stage.
     /// Currently just tucks the card (no wonder stage tracking yet).
+    #[cfg(test)]
     pub fn build_wonder(&mut self, player: usize, card_id: &str) -> Result<(), String> {
         let hand = &mut self.players[player].current_hand;
         if let Some(pos) = hand.iter().position(|c| c == card_id) {
@@ -191,6 +188,7 @@ impl GameState {
     }
 
     /// Discards a card from hand for coins (base +3 coins).
+    #[cfg(test)]
     pub fn burn_card(&mut self, player: usize, card_id: &str) -> Result<(), String> {
         let hand = &mut self.players[player].current_hand;
         if let Some(pos) = hand.iter().position(|c| c == card_id) {
@@ -204,10 +202,12 @@ impl GameState {
 
     // ==================== Observation Tools (very basic versions) ====================
 
+    #[cfg(test)]
     pub fn check_my_cards(&self, player: usize) -> Vec<String> {
         self.players[player].board.played_cards.clone()
     }
 
+    #[cfg(test)]
     pub fn check_my_coins(&self, player: usize) -> u8 {
         self.players[player].board.coins
     }
@@ -855,18 +855,12 @@ pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) 
     run_limited_rounds_game(controllers, u32::MAX)
 }
 
-/// Quick smoke test: runs only the first 2 rounds of age 1.
-/// Useful for fast iteration when testing agents without burning through a full 18-round game.
-pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) -> SevenWondersGameOutcome {
-    run_limited_rounds_game(controllers, 2)
-}
-
 /// Dedicated limited-rounds game runner (used by smoke tests and normal runs).
 /// max_rounds: total number of rounds to play before stopping (across ages).
 ///
 /// This is where the single shared log.txt + personalized per-agent views are built:
 /// - One GameLog accumulates the canonical full plain-text log (with private decision blocks for whoever was deciding).
-/// - For controllers that prefer_log_context (i.e. LLM), we supply get_decision_view_for which only contains
+/// - For LLM and interactive human controllers, we supply get_decision_view_for which only contains
 ///   completed prior round summaries + the current round header + open decision block.
 /// - Same-round actions (even from earlier players in sequential execution) are hidden from the view.
 /// - Autos (FirstPurchaseable) behavior is untouched: they call is_valid_terminal_action directly.
@@ -880,7 +874,7 @@ pub fn run_limited_rounds_game(
 ) -> SevenWondersGameOutcome {
     let n = controllers.len() as u8;
     let mut game = GameState::new(n);
-    let mut game_log = super::GameLog::new();
+    let mut game_log = GameLog::new();
 
     let is_smoke = max_rounds <= 4;
     let label = if max_rounds == 4 {
@@ -1052,14 +1046,9 @@ pub fn run_limited_rounds_game(
 /// Observation tools should return data in (or populate) structures like this.
 #[derive(Debug, Clone)]
 pub struct PlayerView {
-    pub player_id: usize,
-    pub hand: Vec<String>,           // card ids in current hand
-    pub played_cards: Vec<String>,   // own played cards (ids)
+    pub hand: Vec<String>,
     pub coins: u8,
-    pub wonder_id: String,
     pub wonder_stages_built: u8,
-    pub military_tokens: i8,
-    // TODO: neighbor info, science, resources summary, etc. will be added via specific tools.
 }
 
 #[cfg(test)]
@@ -2042,7 +2031,7 @@ mod tests {
     }
 
     /// Every documented chain link: parent built => child plays free (no coins, no trades).
-    /// Senate chains from university (not library directly); see cards.txt.
+    /// Every documented chain link from cards.txt.
     const CHAIN_LINKS: &[(&str, &str)] = &[
         ("altar", "pantheon"),
         ("baths", "aqueduct"),
@@ -2064,7 +2053,7 @@ mod tests {
         ("scriptorium", "courthouse"),
         ("scriptorium", "library"),
         ("library", "university"),
-        ("university", "senate"),
+        ("library", "senate"),
         ("school", "academy"),
         ("school", "study"),
         ("walls", "fortifications"),
@@ -2073,7 +2062,7 @@ mod tests {
     ];
 
     fn assert_card_chains_from(
-        db: &crate::games::seven_wonders::CardDatabase,
+        db: &crate::games::seven_wonders::cards::CardDatabase,
         child: &str,
         parent: &str,
     ) {
@@ -2101,7 +2090,7 @@ mod tests {
 
     #[test]
     fn card_database_chain_from_matches_documented_links() {
-        let db = crate::games::seven_wonders::CardDatabase::load();
+        let db = crate::games::seven_wonders::cards::CardDatabase::load();
         for &(parent, child) in CHAIN_LINKS {
             assert_card_chains_from(&db, child, parent);
         }
@@ -2124,7 +2113,7 @@ mod tests {
 
     #[test]
     fn every_chain_link_requires_resources_without_parent() {
-        let db = crate::games::seven_wonders::CardDatabase::load();
+        let db = crate::games::seven_wonders::cards::CardDatabase::load();
         for &(_parent, child) in CHAIN_LINKS {
             let card = db.get(child).expect("child card");
             if card.cost.coins == 0 && card.cost.resources.counts.is_empty() {
@@ -2145,15 +2134,15 @@ mod tests {
     }
 
     #[test]
-    fn senate_does_not_chain_from_library_alone() {
+    fn senate_chains_from_library() {
         let game = setup_chain_play("senate", &["library"]);
         let action = TerminalAction::PlayCard {
             card_id: "senate".to_string(),
             trades: vec![],
         };
         assert!(
-            !game.is_valid_terminal_action(0, &action),
-            "senate should chain from university, not library alone"
+            game.is_valid_terminal_action(0, &action),
+            "senate should chain free from library per cards.txt"
         );
     }
 }

@@ -43,12 +43,6 @@ pub enum SevenWondersAction {
     Observe(ObservationAction),
 }
 
-impl SevenWondersAction {
-    pub fn is_terminal(&self) -> bool {
-        matches!(self, SevenWondersAction::Terminal(_))
-    }
-}
-
 /// Result returned to the agent after attempting an action.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActionResult {
