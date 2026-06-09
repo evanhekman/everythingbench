@@ -1,6 +1,1 @@
 user.txt
-
-east = right
-west = left
-
-pass left in age 1, right in age 2, left in age 3

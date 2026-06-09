@@ -23,7 +23,7 @@ pub enum Commands {
     },
 
     /// Run a Seven Wonders game with configurable players.
-    /// Each player is: human (user.txt + log), human-agent (full agent context), auto, or an LLM model name.
+    /// Each player is: human, human-agent (full LLM context), auto, or an LLM model name.
     ///
     /// Example: seven-wonders 3 auto human-agent grok-4.3
     SevenWonders {

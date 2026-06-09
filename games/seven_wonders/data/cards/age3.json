@@ -8,8 +8,16 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "ore": 1,
+      "glass": 1,
+      "papyrus": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 7
+    },
     "chain_from": "altar",
     "chain_to": []
   },
@@ -22,9 +30,34 @@
       3,
       4
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "wood": 1
+    },
+    "effect": {
+      "points": 5
+    },
     "chain_from": "theater",
+    "chain_to": []
+  },
+  {
+    "id": "senate",
+    "name": "Senate",
+    "age": 3,
+    "color": "blue",
+    "player_count": [
+      3,
+      5
+    ],
+    "cost": {
+      "wood": 2,
+      "stone": 1,
+      "ore": 1
+    },
+    "effect": {
+      "points": 6
+    },
+    "chain_from": "university",
     "chain_to": []
   },
   {
@@ -36,8 +69,13 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 3,
+      "glass": 1
+    },
+    "effect": {
+      "points": 6
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -50,23 +88,19 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 1,
+      "stone": 1,
+      "ore": 1,
+      "clay": 1,
+      "glass": 1,
+      "papyrus": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 8
+    },
     "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "senate",
-    "name": "Senate",
-    "age": 3,
-    "color": "blue",
-    "player_count": [
-      3,
-      5
-    ],
-    "cost": {},
-    "effect": {},
-    "chain_from": "library",
     "chain_to": []
   },
   {
@@ -78,8 +112,13 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 1,
+      "glass": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": "caravansery",
     "chain_to": []
   },
@@ -92,8 +131,14 @@
       3,
       4
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 1,
+      "ore": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": "forum",
     "chain_to": []
   },
@@ -106,8 +151,13 @@
       4,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "papyrus": 1
+    },
+    "effect": {
+      "points": 12
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -120,8 +170,13 @@
       5,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 1,
+      "ore": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -134,9 +189,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
+    "cost": {
+      "clay": 2,
+      "ore": 1
+    },
+    "effect": {
+      "points": 1
+    },
+    "chain_from": "dispensary",
     "chain_to": []
   },
   {
@@ -148,8 +208,14 @@
       4,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "wood": 1,
+      "papyrus": 1
+    },
+    "effect": {
+      "military": 3
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -162,8 +228,13 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 3,
+      "clay": 1
+    },
+    "effect": {
+      "military": 3
+    },
     "chain_from": "walls",
     "chain_to": []
   },
@@ -176,8 +247,13 @@
       4,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 3,
+      "ore": 1
+    },
+    "effect": {
+      "military": 3
+    },
     "chain_from": "training_ground",
     "chain_to": []
   },
@@ -190,8 +266,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 2,
+      "ore": 1,
+      "loom": 1
+    },
+    "effect": {
+      "military": 3
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -204,8 +286,13 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 3,
+      "wood": 1
+    },
+    "effect": {
+      "military": 3
+    },
     "chain_from": "laboratory",
     "chain_to": []
   },
@@ -218,9 +305,18 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
-    "chain_from": "dispensary",
+    "cost": {
+      "clay": 2,
+      "papyrus": 1,
+      "loom": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
+    "chain_from": [
+      "dispensary",
+      "laboratory"
+    ],
     "chain_to": []
   },
   {
@@ -232,8 +328,13 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 3,
+      "glass": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
     "chain_from": "school",
     "chain_to": []
   },
@@ -246,8 +347,14 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 2,
+      "glass": 1,
+      "loom": 1
+    },
+    "effect": {
+      "science": "cog"
+    },
     "chain_from": "laboratory",
     "chain_to": []
   },
@@ -260,8 +367,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 1,
+      "papyrus": 1,
+      "loom": 1
+    },
+    "effect": {
+      "science": "cog"
+    },
     "chain_from": "school",
     "chain_to": []
   },
@@ -274,34 +387,90 @@
       3,
       4
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 2,
+      "glass": 1,
+      "papyrus": 1
+    },
+    "effect": {
+      "science": "tablet"
+    },
     "chain_from": "library",
     "chain_to": []
   },
   {
     "id": "workers_guild",
-    "name": "Workers Guild",
+    "name": "Worker's Guild",
     "age": 3,
     "color": "purple",
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 2,
+      "wood": 1,
+      "stone": 1,
+      "clay": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
   {
-    "id": "craftsmen_guild",
-    "name": "Craftsmen Guild",
+    "id": "craftsmens_guild",
+    "name": "Craftsmen's Guild",
     "age": 3,
     "color": "purple",
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 2,
+      "ore": 1
+    },
+    "effect": {
+      "points": 2
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "magistrates_guild",
+    "name": "Magistrate's Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {
+      "wood": 3,
+      "stone": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 1
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "traders_guild",
+    "name": "Trader's Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {
+      "papyrus": 1,
+      "glass": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -313,73 +482,108 @@
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "glass": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
   {
     "id": "philosophers_guild",
-    "name": "Philosophers Guild",
+    "name": "Philosopher's Guild",
     "age": 3,
     "color": "purple",
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "builders_guild",
-    "name": "Builders Guild",
-    "age": 3,
-    "color": "purple",
-    "player_count": [
-      3
-    ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "decorators_guild",
-    "name": "Decorators Guild",
-    "age": 3,
-    "color": "purple",
-    "player_count": [
-      3
-    ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 3,
+      "papyrus": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
   {
     "id": "scientists_guild",
-    "name": "Scientists Guild",
+    "name": "Scientist's Guild",
     "age": 3,
     "color": "purple",
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 2,
+      "ore": 2,
+      "papyrus": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
     "chain_from": null,
     "chain_to": []
   },
   {
     "id": "shipowners_guild",
-    "name": "Shipowners Guild",
+    "name": "Shipowner's Guild",
     "age": 3,
     "color": "purple",
     "player_count": [
       3
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 3,
+      "glass": 1,
+      "papyrus": 1
+    },
+    "effect": {
+      "points": 1
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "builders_guild",
+    "name": "Builder's Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {
+      "stone": 3,
+      "clay": 2,
+      "glass": 1
+    },
+    "effect": {
+      "points": 1
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "decorators_guild",
+    "name": "Decorator's Guild",
+    "age": 3,
+    "color": "purple",
+    "player_count": [
+      3
+    ],
+    "cost": {
+      "ore": 2,
+      "stone": 1,
+      "loom": 1
+    },
+    "effect": {
+      "points": 7
+    },
     "chain_from": null,
     "chain_to": []
   }

@@ -1,19 +1,79 @@
 [
   {
-    "id": "loom",
-    "name": "Loom",
+    "id": "sawmill",
+    "name": "Sawmill",
     "age": 2,
-    "color": "grey",
+    "color": "brown",
     "player_count": [
       3,
-      5
+      4
     ],
     "cost": {
       "coins": 1
     },
     "effect": {
       "production": {
-        "loom": 1
+        "wood": 2
+      }
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "quarry",
+    "name": "Quarry",
+    "age": 2,
+    "color": "brown",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "stone": 2
+      }
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "brickyard",
+    "name": "Brickyard",
+    "age": 2,
+    "color": "brown",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "clay": 2
+      }
+    },
+    "chain_from": null,
+    "chain_to": []
+  },
+  {
+    "id": "foundry",
+    "name": "Foundry",
+    "age": 2,
+    "color": "brown",
+    "player_count": [
+      3,
+      4
+    ],
+    "cost": {
+      "coins": 1
+    },
+    "effect": {
+      "production": {
+        "ore": 2
       }
     },
     "chain_from": null,
@@ -28,9 +88,7 @@
       3,
       5
     ],
-    "cost": {
-      "coins": 1
-    },
+    "cost": {},
     "effect": {
       "production": {
         "glass": 1
@@ -48,9 +106,7 @@
       3,
       5
     ],
-    "cost": {
-      "coins": 1
-    },
+    "cost": {},
     "effect": {
       "production": {
         "papyrus": 1
@@ -60,58 +116,20 @@
     "chain_to": []
   },
   {
-    "id": "sawmill",
-    "name": "Sawmill",
+    "id": "loom",
+    "name": "Loom",
     "age": 2,
-    "color": "brown",
+    "color": "grey",
     "player_count": [
       3,
-      4
+      5
     ],
     "cost": {},
-    "effect": {},
-    "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "quarry",
-    "name": "Quarry",
-    "age": 2,
-    "color": "brown",
-    "player_count": [
-      3,
-      4
-    ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "brickyard",
-    "name": "Brickyard",
-    "age": 2,
-    "color": "brown",
-    "player_count": [
-      3,
-      4
-    ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
-    "chain_to": []
-  },
-  {
-    "id": "foundry",
-    "name": "Foundry",
-    "age": 2,
-    "color": "brown",
-    "player_count": [
-      3,
-      4
-    ],
-    "cost": {},
-    "effect": {},
+    "effect": {
+      "production": {
+        "loom": 1
+      }
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -124,8 +142,13 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 2,
+      "wood": 1
+    },
+    "effect": {
+      "points": 4
+    },
     "chain_from": "well",
     "chain_to": []
   },
@@ -138,23 +161,13 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 3
+    },
+    "effect": {
+      "points": 5
+    },
     "chain_from": "baths",
-    "chain_to": []
-  },
-  {
-    "id": "temple",
-    "name": "Temple",
-    "age": 2,
-    "color": "blue",
-    "player_count": [
-      3,
-      6
-    ],
-    "cost": {},
-    "effect": {},
-    "chain_from": null,
     "chain_to": []
   },
   {
@@ -166,9 +179,34 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "loom": 1
+    },
+    "effect": {
+      "points": 4
+    },
     "chain_from": "scriptorium",
+    "chain_to": []
+  },
+  {
+    "id": "temple",
+    "name": "Temple",
+    "age": 2,
+    "color": "blue",
+    "player_count": [
+      3,
+      6
+    ],
+    "cost": {
+      "wood": 1,
+      "clay": 1,
+      "glass": 1
+    },
+    "effect": {
+      "points": 4
+    },
+    "chain_from": null,
     "chain_to": []
   },
   {
@@ -181,8 +219,19 @@
       5,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 2
+    },
+    "effect": {
+      "production": {
+        "or": [
+          "wood",
+          "stone",
+          "clay",
+          "ore"
+        ]
+      }
+    },
     "chain_from": "marketplace",
     "chain_to": [
       "lighthouse"
@@ -199,13 +248,15 @@
       7
     ],
     "cost": {
-      "coins": 3
+      "clay": 2
     },
     "effect": {
-      "trade_discount": {
-        "direction": null,
-        "kind": "manufactured",
-        "cost": 1
+      "production": {
+        "or": [
+          "glass",
+          "papyrus",
+          "loom"
+        ]
       }
     },
     "chain_from": [
@@ -226,7 +277,9 @@
       6
     ],
     "cost": {},
-    "effect": {},
+    "effect": {
+      "coins": 1
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -240,7 +293,9 @@
       7
     ],
     "cost": {},
-    "effect": {},
+    "effect": {
+      "coins": 2
+    },
     "chain_from": null,
     "chain_to": []
   },
@@ -253,8 +308,14 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 1,
+      "ore": 1,
+      "clay": 1
+    },
+    "effect": {
+      "military": 2
+    },
     "chain_from": "apothecary",
     "chain_to": []
   },
@@ -267,8 +328,13 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 2,
+      "ore": 1
+    },
+    "effect": {
+      "military": 2
+    },
     "chain_from": "workshop",
     "chain_to": []
   },
@@ -281,8 +347,12 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 3
+    },
+    "effect": {
+      "military": 2
+    },
     "chain_from": null,
     "chain_to": [
       "fortifications"
@@ -298,8 +368,13 @@
       6,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 2,
+      "wood": 1
+    },
+    "effect": {
+      "military": 2
+    },
     "chain_from": null,
     "chain_to": [
       "circus"
@@ -314,10 +389,16 @@
       3,
       4
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "ore": 2,
+      "glass": 1
+    },
+    "effect": {
+      "science": "compass"
+    },
     "chain_from": "apothecary",
     "chain_to": [
+      "arena",
       "lodge"
     ]
   },
@@ -330,12 +411,17 @@
       3,
       5
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "clay": 2,
+      "papyrus": 1
+    },
+    "effect": {
+      "science": "cog"
+    },
     "chain_from": "workshop",
     "chain_to": [
       "siege_workshop",
-      "observatory"
+      "lodge"
     ]
   },
   {
@@ -347,8 +433,13 @@
       3,
       6
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "stone": 2,
+      "loom": 1
+    },
+    "effect": {
+      "science": "tablet"
+    },
     "chain_from": "scriptorium",
     "chain_to": [
       "senate",
@@ -364,8 +455,13 @@
       3,
       7
     ],
-    "cost": {},
-    "effect": {},
+    "cost": {
+      "wood": 1,
+      "papyrus": 1
+    },
+    "effect": {
+      "science": "tablet"
+    },
     "chain_from": null,
     "chain_to": [
       "academy",

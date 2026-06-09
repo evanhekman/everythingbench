@@ -1,7 +1,8 @@
 //! Player controllers for driving the game (human via terminal or LLM via API).
 
+use super::actions::{SevenWondersAction, TerminalAction};
 use super::state::GameState;
-use super::actions::{TerminalAction, SevenWondersAction};
+use super::term;
 use std::io::{self, Write};
 
 const PROMPTS_DIR: &str = "games/seven_wonders/prompts";
@@ -58,6 +59,20 @@ fn parse_trades(tail: &str) -> Vec<super::types::Trade> {
     out
 }
 
+fn expand_action_shorthand(s: &str) -> String {
+    let mut parts = s.split_whitespace();
+    let Some(cmd) = parts.next() else {
+        return s.to_string();
+    };
+    let rest: String = parts.collect::<Vec<_>>().join(" ");
+    match cmd {
+        "p" => format!("play {}", rest),
+        "w" => format!("wonder {}", rest),
+        "b" => format!("burn {}", rest),
+        _ => s.to_string(),
+    }
+}
+
 /// Parse one agent action line: `play baths`, `play baths left:stone`, `wonder altar`, `burn card`.
 pub fn parse_agent_action_line(
     line: &str,
@@ -73,11 +88,13 @@ pub fn parse_agent_action_line(
     } else {
         vec![]
     };
-    let without_trades: String = cleaned
-        .split_whitespace()
-        .filter(|t| !t.contains(':'))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let without_trades: String = expand_action_shorthand(
+        &cleaned
+            .split_whitespace()
+            .filter(|t| !t.contains(':'))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
 
     if without_trades.starts_with("play ") {
         let card = without_trades[5..].split_whitespace().next()?.to_string();
@@ -105,7 +122,22 @@ pub fn parse_agent_action_line(
     None
 }
 
+/// How the game runner handles invalid or unparsed actions for this controller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControllerDecisionMode {
+    /// Picks only engine-valid actions (no trades). Invalid submissions are retried silently.
+    Auto,
+    /// Terminal human: re-prompt until the player submits a legal action. No auto-burn fallbacks.
+    InteractiveHuman,
+    /// LLM agent: limited retries with error injection, then forced burn fallback.
+    LlmAgent,
+}
+
 pub trait PlayerController {
+    fn decision_mode(&self) -> ControllerDecisionMode {
+        ControllerDecisionMode::Auto
+    }
+
     /// Whether this controller wants a rich log context string (instead of / in addition to raw GameState).
     /// LLM controllers return true so the runner supplies the personalized plain-text log view.
     /// Autos and humans return false and continue to drive directly from GameState (autos unchanged per spec).
@@ -118,6 +150,9 @@ pub trait PlayerController {
     ///   Only LLM impls use it as their prompt content. Others may ignore it.
     /// Returns the chosen terminal action (or observe for humans).
     fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction;
+
+    /// Print static prompt files once before the first round (`human-agent` only).
+    fn print_startup_context(&self, _game: &GameState, _player: usize) {}
 }
 
 /// Simple human controller via terminal.
@@ -229,6 +264,10 @@ impl LLMController {
 }
 
 impl PlayerController for LLMController {
+    fn decision_mode(&self) -> ControllerDecisionMode {
+        ControllerDecisionMode::LlmAgent
+    }
+
     fn prefers_log_context(&self) -> bool {
         true
     }
@@ -314,16 +353,28 @@ impl PlayerController for LLMController {
     }
 }
 
+/// Static portion of the LLM user message (agent + cards + user.txt), without log.
+pub(crate) fn human_agent_static_user_body(game: &GameState) -> String {
+    let agent_txt = load_prompt_file("agent.txt");
+    let cards_txt = load_cards_for_players(game.player_count);
+    let user_txt = load_prompt_file("user.txt");
+    format!("{agent_txt}\n\n{cards_txt}\n\n{user_txt}")
+}
+
+pub(crate) fn system_prompt_text() -> String {
+    load_prompt_file("system_prompt.txt")
+}
+
 /// Build the user-message body shown to a deciding player.
 /// `full_agent_context`: include agent.txt + cards list (same as LLM user message).
 fn build_decision_context(game: &GameState, player: usize, log_view: &str, full_agent_context: bool) -> String {
     let user_txt = load_prompt_file("user.txt");
     if full_agent_context {
-        let agent_txt = load_prompt_file("agent.txt");
-        let cards_txt = load_cards_for_players(game.player_count);
         format!(
-            "{}\n\n{}\n\n{}\n\nCurrent log context for your decision (player {}):\n{}\n",
-            agent_txt, cards_txt, user_txt, player, log_view
+            "{}\n\nCurrent log context for your decision (player {}):\n{}\n",
+            human_agent_static_user_body(game),
+            player,
+            log_view
         )
     } else {
         format!(
@@ -334,73 +385,79 @@ fn build_decision_context(game: &GameState, player: usize, log_view: &str, full_
 }
 
 /// Human at the terminal with log-based play.
-/// - `full_agent_context = true` (`human-agent`): same user message as an LLM agent
-/// - `full_agent_context = false` (`human`): only user.txt + live log (no card list or agent instructions)
 pub struct HumanLogController {
     pub player_label: String,
+    /// When true (`human-agent`), show system_prompt + full agent user message like an LLM.
     pub full_agent_context: bool,
 }
 
 impl HumanLogController {
-    pub fn as_agent(player_label: String) -> Self {
-        Self {
-            player_label,
-            full_agent_context: true,
-        }
-    }
-
     pub fn as_human(player_label: String) -> Self {
         Self {
             player_label,
             full_agent_context: false,
         }
     }
+
+    pub fn as_agent(player_label: String) -> Self {
+        Self {
+            player_label,
+            full_agent_context: true,
+        }
+    }
 }
 
 impl PlayerController for HumanLogController {
+    fn decision_mode(&self) -> ControllerDecisionMode {
+        ControllerDecisionMode::InteractiveHuman
+    }
+
     fn prefers_log_context(&self) -> bool {
         true
+    }
+
+    fn print_startup_context(&self, game: &GameState, player: usize) {
+        if self.full_agent_context {
+            term::print_human_agent_startup_context(
+                game,
+                player,
+                &system_prompt_text(),
+                &human_agent_static_user_body(game),
+            );
+        }
     }
 
     fn decide_action(&mut self, game: &GameState, player: usize, log_view: Option<&str>) -> SevenWondersAction {
         let view = game.view_for_player(player);
         let hand = &view.hand;
 
-        println!("\n{}", "=".repeat(60));
-        if self.full_agent_context {
-            println!("AGENT CONTEXT — {} (player {})", self.player_label, player);
-            println!("(Same user message an LLM receives; system prompt is API-only)");
-        } else {
-            println!("YOUR TURN — {} (player {})", self.player_label, player);
-        }
-        println!("{}\n", "=".repeat(60));
+        loop {
+            if let Some(v) = log_view {
+                if self.full_agent_context {
+                    term::print_human_agent_turn_context(game, player, v);
+                } else {
+                    let user_txt = load_prompt_file("user.txt");
+                    term::print_decision_screen(game, player, &self.player_label, &user_txt, v);
+                }
+            } else {
+                println!("\n{}", term::bold(&format!(
+                    "YOUR TURN — {} (player {})",
+                    self.player_label, player
+                )));
+                println!("hand: {}", term::format_hand_list(game, hand));
+            }
 
-        if let Some(v) = log_view {
-            println!(
-                "{}",
-                build_decision_context(game, player, v, self.full_agent_context)
-            );
-        }
+            print!("> ");
+            term::flush_stdout();
 
-        println!("{}", "=".repeat(60));
-        println!("Enter one action (play / wonder / burn). Examples:");
-        println!("  play marketplace");
-        println!("  play baths left:stone");
-        println!("  burn lumber_yard");
-        print!("> ");
-        io::stdout().flush().unwrap();
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-
-        if let Some(action) = parse_agent_action_line(&input, hand, view.wonder_stages_built) {
-            println!("Parsed: {:?}", action);
-            action
-        } else {
-            println!("Could not parse '{}'. Burning first card in hand.", input.trim());
-            SevenWondersAction::Terminal(TerminalAction::BurnCard {
-                card_id: hand.first().cloned().unwrap_or_else(|| "none".to_string()),
-            })
+            if let Some(action) = parse_agent_action_line(&input, hand, view.wonder_stages_built) {
+                term::print_parse_ok(&format!("{action:?}"));
+                return action;
+            }
+            term::print_parse_fail(input.trim());
         }
     }
 }
@@ -432,5 +489,33 @@ impl PlayerController for FirstPurchaseableController {
         SevenWondersAction::Terminal(TerminalAction::BurnCard {
             card_id: "none".to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::games::seven_wonders::actions::TerminalAction;
+
+    #[test]
+    fn parse_accepts_single_letter_action_shorthand() {
+        let hand = vec!["guard_tower".to_string(), "lumber_yard".to_string()];
+        let play = parse_agent_action_line("p guard_tower", &hand, 0).unwrap();
+        assert!(matches!(
+            play,
+            SevenWondersAction::Terminal(TerminalAction::PlayCard { ref card_id, .. })
+                if card_id == "guard_tower"
+        ));
+        let wonder = parse_agent_action_line("w lumber_yard", &hand, 1).unwrap();
+        assert!(matches!(
+            wonder,
+            SevenWondersAction::Terminal(TerminalAction::BuildWonder { stage: 2, .. })
+        ));
+        let burn = parse_agent_action_line("b lumber_yard", &hand, 0).unwrap();
+        assert!(matches!(
+            burn,
+            SevenWondersAction::Terminal(TerminalAction::BurnCard { ref card_id })
+                if card_id == "lumber_yard"
+        ));
     }
 }

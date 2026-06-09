@@ -577,6 +577,12 @@ right (Player {}) production: [{}]\n",
 
     fn validate_card_play(&self, player: usize, card_id: &str, trades: &[Trade]) -> Result<(), String> {
         let card = self.card_db.get(card_id).ok_or_else(|| "Unknown card".to_string())?;
+        if self.players[player].board.played_cards.iter().any(|c| c == card_id) {
+            return Err(format!(
+                "You have already built {}; each card can only be played once",
+                card_id
+            ));
+        }
         if self.satisfies_chain(player, &card.chain_from) {
             return Ok(());
         }
@@ -823,7 +829,7 @@ fn format_error_for_log(reason: &str) -> String {
         format!("ERROR: {}\n", reason)
     } else if r.contains("invalid trades") {
         "ERROR: Invalid trades. Check neighbor production and use left:resource / right:resource notation (repeat for multiples).\n".to_string()
-    } else if r.contains("not in hand") {
+    } else if r.contains("not in hand") || r.contains("already built") {
         format!("ERROR: {}\n", reason)
     } else {
         format!("ERROR: {}\n", reason)
@@ -853,7 +859,8 @@ pub fn run_smoke_game(controllers: Vec<Box<dyn super::controller::PlayerControll
 ///   completed prior round summaries + the current round header + open decision block.
 /// - Same-round actions (even from earlier players in sequential execution) are hidden from the view.
 /// - Autos (FirstPurchaseable) behavior is untouched: they call is_valid_terminal_action directly.
-/// - Up to 3 attempts for log players on nonsensical/illegal; ERROR lines injected into the decision text on retry.
+/// - Interactive humans re-prompt until a legal action; no auto-burn on parse failure or invalid play.
+/// - LLM agents get up to 3 attempts on illegal actions, then a forced burn fallback.
 /// - Full log is written to log.txt after every decision close and every round (for live `cat log.txt` or `tail -f`).
 /// - Console also prints the FULL LOG and the exact PERSONALIZED VIEW SENT each time for the agent.
 pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::PlayerController>>, max_rounds: u32) {
@@ -884,62 +891,90 @@ pub fn run_limited_rounds_game(mut controllers: Vec<Box<dyn super::controller::P
         let age_before = game.current_age;
 
         for p in 0..n as usize {
-            let prefers_log = controllers[p].prefers_log_context();
+            use super::controller::ControllerDecisionMode;
 
-            if prefers_log {
-                let private = game.get_private_decision_info(p);
-                game_log.begin_player_decision(p, private);
+            match controllers[p].decision_mode() {
+                ControllerDecisionMode::InteractiveHuman | ControllerDecisionMode::LlmAgent => {
+                    let private = game.get_private_decision_info(p);
+                    game_log.begin_player_decision(p, private);
 
-                let mut attempts = 0u32;
-                let mut got_success = false;
+                    let max_attempts = match controllers[p].decision_mode() {
+                        ControllerDecisionMode::LlmAgent => 3,
+                        _ => u32::MAX,
+                    };
+                    let mut attempts = 0u32;
+                    let mut got_success = false;
 
-                loop {
-                    attempts += 1;
-                    if attempts > 3 {
-                        println!("[p{}] 3 attempts exhausted - forcing fallback burn", p);
-                        break;
-                    }
-
-                    let view = game_log.get_decision_view_for(p);
-                    let action = controllers[p].decide_action(&game, p, Some(&view));
-
-                    if let SevenWondersAction::Terminal(term) = action {
-                        let res = game.submit_terminal_action(p, term.clone());
-                        println!("Player {} result: {:?}", p, res);
-
-                        if matches!(res, ActionResult::Success { .. }) {
-                            let summary = format_action_summary_lines(&game, p, &term);
-                            game_log.close_current_decision(&summary);
-                            got_success = true;
+                    loop {
+                        attempts += 1;
+                        if attempts > max_attempts {
+                            println!("[p{}] {} attempts exhausted - forcing fallback burn", p, max_attempts);
                             break;
-                        } else if let ActionResult::Invalid { reason, .. } = res {
-                            game_log.append_to_current_decision(&format_error_for_log(&reason));
                         }
-                    } else {
-                        game_log.append_to_current_decision(
-                            "ERROR: Only play, wonder, and burn actions are allowed.\n",
-                        );
-                    }
-                }
 
-                if !got_success {
-                    if let Some(card) = game.players[p].current_hand.first().cloned() {
-                        let fb = TerminalAction::BurnCard { card_id: card.clone() };
-                        let _ = game.submit_terminal_action(p, fb.clone());
-                        let summary = format_action_summary_lines(&game, p, &fb);
-                        game_log.close_current_decision(&summary);
+                        let view = game_log.get_decision_view_for(p);
+                        let action = controllers[p].decide_action(&game, p, Some(&view));
+
+                        if let SevenWondersAction::Terminal(term) = action {
+                            let res = game.submit_terminal_action(p, term.clone());
+                            let is_human = matches!(
+                                controllers[p].decision_mode(),
+                                super::controller::ControllerDecisionMode::InteractiveHuman
+                            );
+                            if is_human {
+                                super::term::print_action_result(p, &format!("{res:?}"));
+                            } else {
+                                println!("Player {} result: {:?}", p, res);
+                            }
+
+                            if matches!(res, ActionResult::Success { .. }) {
+                                let summary = format_action_summary_lines(&game, p, &term);
+                                game_log.close_current_decision(&summary);
+                                got_success = true;
+                                break;
+                            } else if let ActionResult::Invalid { reason, .. } = res {
+                                let err = format_error_for_log(&reason);
+                                if is_human {
+                                    super::term::print_error_line(err.trim());
+                                } else {
+                                    println!("{}", err.trim());
+                                }
+                                game_log.append_to_current_decision(&err);
+                            }
+                        } else {
+                            let err = "ERROR: Only play, wonder, and burn actions are allowed.\n";
+                            if matches!(
+                                controllers[p].decision_mode(),
+                                super::controller::ControllerDecisionMode::InteractiveHuman
+                            ) {
+                                super::term::print_error_line(err.trim());
+                            } else {
+                                println!("{}", err.trim());
+                            }
+                            game_log.append_to_current_decision(err);
+                        }
+                    }
+
+                    if !got_success {
+                        if let Some(card) = game.players[p].current_hand.first().cloned() {
+                            let fb = TerminalAction::BurnCard { card_id: card.clone() };
+                            let _ = game.submit_terminal_action(p, fb.clone());
+                            let summary = format_action_summary_lines(&game, p, &fb);
+                            game_log.close_current_decision(&summary);
+                        }
                     }
                 }
-            } else {
-                loop {
-                    let action = controllers[p].decide_action(&game, p, None);
-                    if let SevenWondersAction::Terminal(term) = action {
-                        let res = game.submit_terminal_action(p, term.clone());
-                        println!("Player {} result: {:?}", p, res);
-                        if matches!(res, ActionResult::Success { .. }) {
-                            let summary = format_action_summary_lines(&game, p, &term);
-                            game_log.append_simple_player_action(&summary);
-                            break;
+                ControllerDecisionMode::Auto => {
+                    loop {
+                        let action = controllers[p].decide_action(&game, p, None);
+                        if let SevenWondersAction::Terminal(term) = action {
+                            let res = game.submit_terminal_action(p, term.clone());
+                            println!("Player {} result: {:?}", p, res);
+                            if matches!(res, ActionResult::Success { .. }) {
+                                let summary = format_action_summary_lines(&game, p, &term);
+                                game_log.append_simple_player_action(&summary);
+                                break;
+                            }
                         }
                     }
                 }
@@ -1011,6 +1046,61 @@ mod tests {
     use super::GameState;
     use crate::games::seven_wonders::actions::{ActionResult, TerminalAction};
     use crate::games::seven_wonders::types::{Neighbor, Resource, Trade};
+
+    fn expect_invalid(res: ActionResult, hint: &str) {
+        match res {
+            ActionResult::Invalid { reason, .. } => {
+                assert!(
+                    reason.to_lowercase().contains(&hint.to_lowercase()),
+                    "expected error containing {:?}, got: {}",
+                    hint,
+                    reason
+                );
+            }
+            other => panic!("expected Invalid containing {:?}, got {:?}", hint, other),
+        }
+    }
+
+    /// Invalid actions must not queue a round action or spend resources/coins early.
+    fn assert_no_action_queued(game: &GameState, player: usize, card_id: &str, coins_before: u8) {
+        assert!(game.current_round_actions[player].is_none());
+        assert!(game.players[player].current_hand.contains(&card_id.to_string()));
+        assert_eq!(game.players[player].board.coins, coins_before);
+        assert!(!game.players[player].board.played_cards.contains(&card_id.to_string()));
+    }
+
+    fn setup_round2_player1_scenario() -> GameState {
+        let mut game = GameState::new(3);
+        // Mirror log: after age-1 round 1, player 1 chose guard_tower; neighbors played red cards.
+        game.players[0].board.played_cards = vec!["barracks".to_string()];
+        game.players[1].board.played_cards = vec!["guard_tower".to_string()];
+        game.players[2].board.played_cards = vec!["stockade".to_string()];
+        game.players[1].current_hand = vec![
+            "altar".to_string(),
+            "apothecary".to_string(),
+            "baths".to_string(),
+            "clay_pit".to_string(),
+            "clay_pool".to_string(),
+            "east_trading_post".to_string(),
+        ];
+        game.players[1].board.coins = 3;
+        game
+    }
+
+    fn burn_for_other_players(game: &mut GameState, skip: usize) {
+        for p in 0..game.player_count as usize {
+            if p == skip {
+                continue;
+            }
+            game.players[p].current_hand = vec!["lumber_yard".to_string()];
+            let _ = game.submit_terminal_action(
+                p,
+                TerminalAction::BurnCard {
+                    card_id: "lumber_yard".to_string(),
+                },
+            );
+        }
+    }
 
     #[test]
     fn player_receives_starting_hand() {
@@ -1175,10 +1265,9 @@ mod tests {
     #[test]
     fn trading_post_and_forum_decrease_buy_cost_by_1() {
         let mut game = GameState::new(3);
-        // player 0 has workshop (needs glass), has east trading post? for manuf we use forum
         game.players[0].current_hand = vec!["workshop".to_string()];
         game.players[0].board.coins = 1;
-        game.players[0].board.played_cards = vec!["forum".to_string()]; // manuf discount to 1 from both
+        game.players[0].board.played_cards = vec!["marketplace".to_string()];
         // left neighbor of p0 is p2, so put glass production on p2
         game.players[2].board.played_cards = vec!["glassworks".to_string()];
         // without forum would need 2 coins, with it 1 coin -> should succeed
@@ -1308,7 +1397,7 @@ mod tests {
             card_id: "workshop".to_string(),
             trades: vec![],
         });
-        assert!(game.players[0].board.science_symbols.contains(&"compass".to_string()));
+        assert!(game.players[0].board.science_symbols.contains(&"gear".to_string()));
     }
 
     #[test]
@@ -1362,5 +1451,351 @@ mod tests {
             matches!(res2, ActionResult::Success { .. }),
             "apothecary should succeed because player owns loom production: {:?}", res2
         );
+    }
+
+    // ==================== Validation tests requested ====================
+
+    #[test]
+    fn card_database_loads_resource_and_coin_costs() {
+        let game = GameState::new(3);
+        let apothecary = game.card_db.get("apothecary").expect("apothecary");
+        assert_eq!(apothecary.cost.resources.get(Resource::Loom), 1);
+        assert_eq!(apothecary.cost.coins, 0);
+
+        let altar = game.card_db.get("altar").expect("altar");
+        assert!(altar.cost.resources.is_empty());
+        assert_eq!(altar.cost.coins, 0);
+
+        let clay_pit = game.card_db.get("clay_pit").expect("clay_pit");
+        assert_eq!(clay_pit.cost.coins, 1);
+        assert!(clay_pit.cost.resources.is_empty());
+
+        let east_post = game.card_db.get("east_trading_post").expect("east_trading_post");
+        assert_eq!(east_post.cost.coins, 0);
+
+        let guard_tower = game.card_db.get("guard_tower").expect("guard_tower");
+        assert_eq!(guard_tower.cost.resources.get(Resource::Clay), 1);
+    }
+
+    #[test]
+    fn guard_tower_requires_brick_without_production_or_trades() {
+        let mut game = GameState::new(3);
+        game.players[1].current_hand = vec!["guard_tower".to_string()];
+        game.players[1].board.coins = 3;
+        let res = game.submit_terminal_action(
+            1,
+            TerminalAction::PlayCard {
+                card_id: "guard_tower".to_string(),
+                trades: vec![],
+            },
+        );
+        expect_invalid(res, "insufficient resources");
+        assert_no_action_queued(&game, 1, "guard_tower", 3);
+    }
+
+    #[test]
+    fn round2_log_hand_rejects_resource_cost_cards_without_trades() {
+        let mut game = setup_round2_player1_scenario();
+        let player = 1;
+
+        for card_id in ["apothecary", "baths"] {
+            let res = game.submit_terminal_action(
+                player,
+                TerminalAction::PlayCard {
+                    card_id: card_id.to_string(),
+                    trades: vec![],
+                },
+            );
+            expect_invalid(res, "insufficient resources");
+            assert_no_action_queued(&game, player, card_id, 3);
+        }
+    }
+
+    #[test]
+    fn round2_log_hand_allows_free_and_coin_only_cards() {
+        let mut game = setup_round2_player1_scenario();
+        let player = 1;
+        burn_for_other_players(&mut game, player);
+
+        let res_pool = game.submit_terminal_action(
+            player,
+            TerminalAction::PlayCard {
+                card_id: "clay_pool".to_string(),
+                trades: vec![],
+            },
+        );
+        assert!(matches!(res_pool, ActionResult::Success { .. }), "{:?}", res_pool);
+        assert!(game.players[player].board.played_cards.contains(&"clay_pool".to_string()));
+        assert_eq!(game.players[player].board.coins, 3);
+
+        let mut game2 = setup_round2_player1_scenario();
+        burn_for_other_players(&mut game2, player);
+        let res_pit = game2.submit_terminal_action(
+            player,
+            TerminalAction::PlayCard {
+                card_id: "clay_pit".to_string(),
+                trades: vec![],
+            },
+        );
+        assert!(matches!(res_pit, ActionResult::Success { .. }), "{:?}", res_pit);
+        assert_eq!(game2.players[player].board.coins, 2);
+
+        let mut game3 = setup_round2_player1_scenario();
+        burn_for_other_players(&mut game3, player);
+        let res_post = game3.submit_terminal_action(
+            player,
+            TerminalAction::PlayCard {
+                card_id: "east_trading_post".to_string(),
+                trades: vec![],
+            },
+        );
+        assert!(matches!(res_post, ActionResult::Success { .. }), "{:?}", res_post);
+        assert_eq!(game3.players[player].board.coins, 3);
+    }
+
+    #[test]
+    fn coin_only_cards_fail_when_player_cannot_pay() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["clay_pit".to_string(), "timber_yard".to_string()];
+        game.players[0].board.coins = 0;
+
+        for card_id in ["clay_pit", "timber_yard"] {
+            let res = game.submit_terminal_action(
+                0,
+                TerminalAction::PlayCard {
+                    card_id: card_id.to_string(),
+                    trades: vec![],
+                },
+            );
+            expect_invalid(res, "not enough coins");
+            assert_no_action_queued(&game, 0, card_id, 0);
+        }
+    }
+
+    #[test]
+    fn direct_play_card_bypasses_validation() {
+        // Document that only submit_terminal_action enforces costs (game loop uses that path).
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["apothecary".to_string()];
+        game.players[0].board.coins = 3;
+        assert!(!game.is_valid_terminal_action(
+            0,
+            &TerminalAction::PlayCard {
+                card_id: "apothecary".to_string(),
+                trades: vec![],
+            }
+        ));
+        assert!(game.play_card(0, "apothecary").is_ok());
+        assert!(game.players[0].board.played_cards.contains(&"apothecary".to_string()));
+    }
+
+    #[test]
+    fn play_fails_when_unaffordable_without_trades() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 10;
+        // baths costs 1 stone; no producer on board and no trades specified
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![],
+            },
+        );
+        expect_invalid(res, "insufficient resources");
+        assert!(game.players[0].current_hand.contains(&"baths".to_string()));
+    }
+
+    #[test]
+    fn play_fails_when_trading_from_wrong_neighbor() {
+        let mut game = GameState::new(3);
+        // p0 right neighbor is p1; stone only on p1
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 10;
+        game.players[1].board.played_cards = vec!["stone_pit".to_string()];
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Left,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        expect_invalid(res, "invalid trades");
+    }
+
+    #[test]
+    fn wonder_build_fails_when_unaffordable() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["lumber_yard".to_string()];
+        game.players[0].board.coins = 10;
+        // Gizah A stage 1 costs 2 stone; no stone available
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::BuildWonder {
+                card_id: "lumber_yard".to_string(),
+                stage: 1,
+                trades: vec![],
+            },
+        );
+        expect_invalid(res, "insufficient resources");
+    }
+
+    #[test]
+    fn trade_fails_when_insufficient_coins() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 0;
+        game.players[1].board.played_cards = vec!["stone_pit".to_string()];
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Right,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        expect_invalid(res, "not enough coins");
+    }
+
+    #[test]
+    fn marketplace_discounts_manufactured_goods_from_either_neighbor() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["workshop".to_string()];
+        game.players[0].board.coins = 1;
+        game.players[0].board.played_cards = vec!["marketplace".to_string()];
+        game.players[1].board.played_cards = vec!["glassworks".to_string()];
+        burn_for_other_players(&mut game, 0);
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "workshop".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Right,
+                    resource: Resource::Glass,
+                }],
+            },
+        );
+        assert!(matches!(res, ActionResult::Success { .. }), "marketplace right: {:?}", res);
+        assert_eq!(game.players[0].board.coins, 0);
+
+        let mut game2 = GameState::new(3);
+        game2.players[0].current_hand = vec!["scriptorium".to_string()];
+        game2.players[0].board.coins = 1;
+        game2.players[0].board.played_cards = vec!["marketplace".to_string()];
+        game2.players[2].board.played_cards = vec!["press".to_string()];
+        burn_for_other_players(&mut game2, 0);
+        let res2 = game2.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "scriptorium".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Left,
+                    resource: Resource::Papyrus,
+                }],
+            },
+        );
+        assert!(matches!(res2, ActionResult::Success { .. }), "marketplace left papyrus: {:?}", res2);
+        assert_eq!(game2.players[0].board.coins, 0);
+    }
+
+    #[test]
+    fn west_trading_post_discounts_raw_from_left_only() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 1;
+        game.players[0].board.played_cards = vec!["west_trading_post".to_string()];
+        game.players[2].board.played_cards = vec!["stone_pit".to_string()];
+        burn_for_other_players(&mut game, 0);
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Left,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        assert!(matches!(res, ActionResult::Success { .. }), "west post left discount: {:?}", res);
+        assert_eq!(game.players[0].board.coins, 0);
+
+        // Same card should still cost 2 coins from the right neighbor.
+        let mut game2 = GameState::new(3);
+        game2.players[0].current_hand = vec!["baths".to_string()];
+        game2.players[0].board.coins = 1;
+        game2.players[0].board.played_cards = vec!["west_trading_post".to_string()];
+        game2.players[1].board.played_cards = vec!["stone_pit".to_string()];
+        let res2 = game2.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Right,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        expect_invalid(res2, "not enough coins");
+    }
+
+    #[test]
+    fn east_trading_post_discounts_raw_from_right_only() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 1;
+        game.players[0].board.played_cards = vec!["east_trading_post".to_string()];
+        game.players[1].board.played_cards = vec!["stone_pit".to_string()];
+        burn_for_other_players(&mut game, 0);
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Right,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        assert!(matches!(res, ActionResult::Success { .. }), "east post right discount: {:?}", res);
+        assert_eq!(game.players[0].board.coins, 0);
+
+        let mut game2 = GameState::new(3);
+        game2.players[0].current_hand = vec!["baths".to_string()];
+        game2.players[0].board.coins = 1;
+        game2.players[0].board.played_cards = vec!["east_trading_post".to_string()];
+        game2.players[2].board.played_cards = vec!["stone_pit".to_string()];
+        let res2 = game2.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "baths".to_string(),
+                trades: vec![Trade {
+                    from: Neighbor::Left,
+                    resource: Resource::Stone,
+                }],
+            },
+        );
+        expect_invalid(res2, "not enough coins");
+    }
+
+    #[test]
+    fn play_fails_when_duplicate_card_already_built() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["lumber_yard".to_string()];
+        game.players[0].board.played_cards = vec!["lumber_yard".to_string()];
+        game.players[0].board.coins = 10;
+        let res = game.submit_terminal_action(
+            0,
+            TerminalAction::PlayCard {
+                card_id: "lumber_yard".to_string(),
+                trades: vec![],
+            },
+        );
+        expect_invalid(res, "already");
+        assert!(game.players[0].current_hand.contains(&"lumber_yard".to_string()));
     }
 }

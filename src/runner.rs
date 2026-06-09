@@ -9,8 +9,8 @@ use std::fs;
 /// Run Seven Wonders with per-seat player types.
 ///
 /// Each spec is one of:
-/// - `human-agent` — full agent context (agent.txt + cards + user.txt + log), terminal input
-/// - `human` — minimal context (user.txt + log only), terminal input
+/// - `human` — trimmed terminal player (user.txt + log); re-prompt until legal action
+/// - `human-agent` — full LLM-equivalent context (system + agent + cards + log); terminal input
 /// - `auto` — first playable card in hand (no trades), else burn
 /// - `<model-name>` — LLM agent via API (e.g. grok-4.3)
 pub fn run_seven_wonders(
@@ -28,8 +28,8 @@ pub fn run_seven_wonders(
     }
 
     use crate::games::seven_wonders::{
-        controller::PlayerController, FirstPurchaseableController, HumanLogController, LLMController,
-        run_game, run_limited_rounds_game,
+        controller::PlayerController, FirstPurchaseableController, GameState, HumanLogController,
+        LLMController, run_game, run_limited_rounds_game, term,
     };
 
     let mut controllers: Vec<Box<dyn PlayerController>> = Vec::with_capacity(player_count as usize);
@@ -48,9 +48,21 @@ pub fn run_seven_wonders(
         controllers.push(controller);
     }
 
+    let has_interactive_human = player_specs
+        .iter()
+        .any(|s| matches!(s.to_lowercase().as_str(), "human" | "human-agent"));
+    if has_interactive_human {
+        term::clear_screen();
+    }
+
     println!("Starting Seven Wonders ({} players):", player_count);
     for (i, spec) in player_specs.iter().enumerate() {
         println!("  Player {}: {}", i, spec);
+    }
+
+    let game = GameState::new(player_count);
+    for (p, controller) in controllers.iter().enumerate() {
+        controller.print_startup_context(&game, p);
     }
 
     match max_rounds {

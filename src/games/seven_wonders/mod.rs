@@ -9,6 +9,7 @@ pub mod controller;
 pub mod log;
 pub mod scoring;
 pub mod state;
+pub mod term;
 pub mod types;
 
 pub use self::actions::{

@@ -259,7 +259,7 @@ fn chaining_relationships() {
         ("workshop", "archery_range"),
         ("workshop", "laboratory"),
         ("laboratory", "siege_workshop"),
-        ("laboratory", "observatory"),
+        ("laboratory", "lodge"),
         ("scriptorium", "courthouse"),
         ("scriptorium", "library"),
         ("library", "senate"),
