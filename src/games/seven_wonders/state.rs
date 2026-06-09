@@ -1833,4 +1833,120 @@ mod tests {
         expect_invalid(res, "already");
         assert!(game.players[0].current_hand.contains(&"lumber_yard".to_string()));
     }
+
+    /// Every documented chain link: parent built => child plays free (no coins, no trades).
+    /// Senate chains from university (not library directly); see cards.txt.
+    const CHAIN_LINKS: &[(&str, &str)] = &[
+        ("altar", "pantheon"),
+        ("baths", "aqueduct"),
+        ("well", "statue"),
+        ("theater", "gardens"),
+        ("marketplace", "caravansery"),
+        ("caravansery", "lighthouse"),
+        ("east_trading_post", "forum"),
+        ("west_trading_post", "forum"),
+        ("forum", "haven"),
+        ("apothecary", "stables"),
+        ("apothecary", "dispensary"),
+        ("dispensary", "arena"),
+        ("dispensary", "lodge"),
+        ("workshop", "archery_range"),
+        ("workshop", "laboratory"),
+        ("laboratory", "siege_workshop"),
+        ("laboratory", "observatory"),
+        ("scriptorium", "courthouse"),
+        ("scriptorium", "library"),
+        ("library", "university"),
+        ("university", "senate"),
+        ("school", "academy"),
+        ("school", "study"),
+        ("walls", "fortifications"),
+        ("training_ground", "circus"),
+        ("laboratory", "lodge"),
+    ];
+
+    fn assert_card_chains_from(
+        db: &crate::games::seven_wonders::CardDatabase,
+        child: &str,
+        parent: &str,
+    ) {
+        use serde_json::Value;
+        let card = db
+            .get(child)
+            .unwrap_or_else(|| panic!("unknown card id: {child}"));
+        let ok = match &card.chain_from {
+            Some(Value::String(id)) => id == parent,
+            Some(Value::Array(ids)) => ids
+                .iter()
+                .any(|v| v.as_str() == Some(parent)),
+            _ => false,
+        };
+        assert!(ok, "{child} should list chain_from {parent}, got {:?}", card.chain_from);
+    }
+
+    fn setup_chain_play(child: &str, parents: &[&str]) -> GameState {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec![child.to_string()];
+        game.players[0].board.played_cards = parents.iter().map(|p| (*p).to_string()).collect();
+        game.players[0].board.coins = 0;
+        game
+    }
+
+    #[test]
+    fn card_database_chain_from_matches_documented_links() {
+        let db = crate::games::seven_wonders::CardDatabase::load();
+        for &(parent, child) in CHAIN_LINKS {
+            assert_card_chains_from(&db, child, parent);
+        }
+    }
+
+    #[test]
+    fn every_chain_link_builds_free_when_parent_built() {
+        for &(parent, child) in CHAIN_LINKS {
+            let game = setup_chain_play(child, &[parent]);
+            let action = TerminalAction::PlayCard {
+                card_id: child.to_string(),
+                trades: vec![],
+            };
+            assert!(
+                game.is_valid_terminal_action(0, &action),
+                "chain {parent} -> {child} should be free with zero coins and no trades"
+            );
+        }
+    }
+
+    #[test]
+    fn every_chain_link_requires_resources_without_parent() {
+        let db = crate::games::seven_wonders::CardDatabase::load();
+        for &(_parent, child) in CHAIN_LINKS {
+            let card = db.get(child).expect("child card");
+            if card.cost.coins == 0 && card.cost.resources.counts.is_empty() {
+                continue;
+            }
+            let mut game = GameState::new(3);
+            game.players[0].current_hand = vec![child.to_string()];
+            game.players[0].board.coins = 0;
+            let action = TerminalAction::PlayCard {
+                card_id: child.to_string(),
+                trades: vec![],
+            };
+            assert!(
+                !game.is_valid_terminal_action(0, &action),
+                "{child} should require resources when chain parent is not built"
+            );
+        }
+    }
+
+    #[test]
+    fn senate_does_not_chain_from_library_alone() {
+        let game = setup_chain_play("senate", &["library"]);
+        let action = TerminalAction::PlayCard {
+            card_id: "senate".to_string(),
+            trades: vec![],
+        };
+        assert!(
+            !game.is_valid_terminal_action(0, &action),
+            "senate should chain from university, not library alone"
+        );
+    }
 }
