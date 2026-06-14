@@ -123,12 +123,18 @@ pub fn parse_agent_action_line(
             }));
         }
     } else if without_trades.starts_with("wonder ") {
-        let card = without_trades[7..].split_whitespace().next()?.to_string();
+        let tokens: Vec<&str> = without_trades[7..].split_whitespace().collect();
+        let card = tokens.first()?.to_string();
+        let mut discard_play = None;
+        if let Some(idx) = tokens.iter().position(|t| *t == "discard") {
+            discard_play = tokens.get(idx + 1).map(|s| (*s).to_string());
+        }
         if hand.contains(&card) {
             return Some(SevenWondersAction::Terminal(TerminalAction::BuildWonder {
                 card_id: card,
                 stage: wonder_stages_built + 1,
                 trades,
+                discard_play,
             }));
         }
     } else if without_trades.starts_with("burn ") {

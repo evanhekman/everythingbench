@@ -1,0 +1,666 @@
+{
+  "boards": [
+    {
+      "id": "alexandria_day",
+      "wonder": "alexandria",
+      "name": "Alexandria",
+      "side": "day",
+      "token": "glass",
+      "display_name": "Alexandria (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+1 wood/stone/ore/brick",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "produce_raw_choice"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "papyrus",
+            "loom"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "alexandria_night",
+      "wonder": "alexandria",
+      "name": "Alexandria",
+      "side": "night",
+      "token": "glass",
+      "display_name": "Alexandria (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+1 wood/stone/ore/brick",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "produce_raw_choice"
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "ore",
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+1 glass/paper/cloth",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "produce_manufactured_choice"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "wood",
+            "wood",
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "babylon_day",
+      "wonder": "babylon",
+      "name": "Babylon",
+      "side": "day",
+      "token": "wood",
+      "display_name": "Babylon (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "ore",
+            "ore",
+            "loom"
+          ],
+          "benefit_text": "+1 tablet/compass/cog",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "science_choice"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "wood",
+            "wood",
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "babylon_night",
+      "wonder": "babylon",
+      "name": "Babylon",
+      "side": "night",
+      "token": "wood",
+      "display_name": "Babylon (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "you may play both cards in the 6th round of each age.",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "sixth_round_extra_play"
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "clay",
+            "clay",
+            "clay",
+            "glass"
+          ],
+          "benefit_text": "+1 tablet/compass/cog",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "science_choice"
+        }
+      ]
+    },
+    {
+      "id": "ephesos_day",
+      "wonder": "ephesos",
+      "name": "Ephesos",
+      "side": "day",
+      "token": "paper",
+      "display_name": "Ephesos (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+9 coins",
+          "vp": 0,
+          "coins": 9,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "ore",
+            "ore",
+            "glass"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "ephesos_night",
+      "wonder": "ephesos",
+      "name": "Ephesos",
+      "side": "night",
+      "token": "paper",
+      "display_name": "Ephesos (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+4 coins, +2 points",
+          "vp": 2,
+          "coins": 4,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+4 coins, +3 points",
+          "vp": 3,
+          "coins": 4,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "ore",
+            "ore",
+            "loom"
+          ],
+          "benefit_text": "+4 coins, +5 points",
+          "vp": 5,
+          "coins": 4,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "gizah_day",
+      "wonder": "gizah",
+      "name": "Gizah",
+      "side": "day",
+      "token": "stone",
+      "display_name": "Gizah (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "clay",
+            "clay",
+            "loom"
+          ],
+          "benefit_text": "+5 points",
+          "vp": 5,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "stone",
+            "stone",
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "gizah_night",
+      "wonder": "gizah",
+      "name": "Gizah",
+      "side": "night",
+      "token": "stone",
+      "display_name": "Gizah (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "stone",
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+5 points",
+          "vp": 5,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "clay",
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+5 points",
+          "vp": 5,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 4,
+          "cost": [
+            "stone",
+            "stone",
+            "stone",
+            "stone",
+            "papyrus"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "halikarnassos_day",
+      "wonder": "halikarnassos",
+      "name": "Halikarnassos",
+      "side": "day",
+      "token": "cloth",
+      "display_name": "Halikarnassos (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "glass",
+            "loom"
+          ],
+          "benefit_text": "play a card from the discard pile for free",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "play_from_discard"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "stone",
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "halikarnassos_night",
+      "wonder": "halikarnassos",
+      "name": "Halikarnassos",
+      "side": "night",
+      "token": "cloth",
+      "display_name": "Halikarnassos (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "play a card from the discard pile for free",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "play_from_discard"
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "glass",
+            "loom"
+          ],
+          "benefit_text": "play a card from the discard pile for free",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "play_from_discard"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "wood",
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "play a card from the discard pile for free",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "play_from_discard"
+        }
+      ]
+    },
+    {
+      "id": "olympia_day",
+      "wonder": "olympia",
+      "name": "Olympia",
+      "side": "day",
+      "token": "brick",
+      "display_name": "Olympia (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "wood",
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "the first card of each color you play is free",
+          "vp": 0,
+          "coins": 0,
+          "military": 0,
+          "effect": "first_per_color_free"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "clay",
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "olympia_night",
+      "wonder": "olympia",
+      "name": "Olympia",
+      "side": "night",
+      "token": "brick",
+      "display_name": "Olympia (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+2 points, the first card you play each age is free",
+          "vp": 2,
+          "coins": 0,
+          "military": 0,
+          "effect": "first_per_age_free"
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "clay",
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+3 points, the last card you play each age is free",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": "last_per_age_free"
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "glass",
+            "papyrus",
+            "loom"
+          ],
+          "benefit_text": "+5 points",
+          "vp": 5,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "rhodos_day",
+      "wonder": "rhodos",
+      "name": "Rhodos",
+      "side": "day",
+      "token": "ore",
+      "display_name": "Rhodos (day)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "wood",
+            "wood"
+          ],
+          "benefit_text": "+3 points",
+          "vp": 3,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "clay",
+            "clay",
+            "clay"
+          ],
+          "benefit_text": "+2 military",
+          "vp": 0,
+          "coins": 0,
+          "military": 2,
+          "effect": null
+        },
+        {
+          "stage": 3,
+          "cost": [
+            "ore",
+            "ore",
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+7 points",
+          "vp": 7,
+          "coins": 0,
+          "military": 0,
+          "effect": null
+        }
+      ]
+    },
+    {
+      "id": "rhodos_night",
+      "wonder": "rhodos",
+      "name": "Rhodos",
+      "side": "night",
+      "token": "ore",
+      "display_name": "Rhodos (night)",
+      "stages": [
+        {
+          "stage": 1,
+          "cost": [
+            "stone",
+            "stone",
+            "stone"
+          ],
+          "benefit_text": "+1 military, +3 coins, +3 points",
+          "vp": 3,
+          "coins": 3,
+          "military": 1,
+          "effect": null
+        },
+        {
+          "stage": 2,
+          "cost": [
+            "ore",
+            "ore",
+            "ore",
+            "ore"
+          ],
+          "benefit_text": "+1 military, +4 coins, +4 points",
+          "vp": 4,
+          "coins": 4,
+          "military": 1,
+          "effect": null
+        }
+      ]
+    }
+  ]
+}

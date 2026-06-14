@@ -1,6 +1,7 @@
 //! End-of-game scoring for Seven Wonders (base game).
 
 use super::cards::CardDatabase;
+use super::wonders::WonderDatabase;
 use super::types::{Effect, ScienceSymbol};
 use std::collections::HashMap;
 
@@ -20,6 +21,7 @@ pub struct ScoreBreakdown {
 
 pub fn compute_final_score(
     card_db: &CardDatabase,
+    wonder_db: &WonderDatabase,
     player: usize,
     players: &[super::state::PlayerState],
     player_count: u8,
@@ -32,7 +34,7 @@ pub fn compute_final_score(
     breakdown.military_victory = board.military_victory_vp as i32;
     breakdown.military_defeat = -(board.defeat_tokens as i32);
     breakdown.treasury = (board.coins / 3) as i32;
-    breakdown.wonders = wonder_vp(&board.wonder_id, board.wonder_stages_built);
+    breakdown.wonders = wonder_db.wonder_vp(&board.wonder_id, board.wonder_stages_built);
 
     for cid in &board.played_cards {
         let Some(card) = card_db.get(cid) else { continue };
@@ -52,7 +54,7 @@ pub fn compute_final_score(
 
     for cid in &board.played_cards {
         if card_db.get(cid).map(|c| c.color.as_str()) == Some("purple") {
-            breakdown.guilds += guild_vp(card_db, cid, player, players, n);
+            breakdown.guilds += guild_vp(card_db, wonder_db, cid, player, players, n);
         }
     }
 
@@ -66,17 +68,6 @@ pub fn compute_final_score(
         + breakdown.guilds;
 
     breakdown
-}
-
-fn wonder_vp(wonder_id: &str, stages: u8) -> i32 {
-    if wonder_id == "gizah_a" {
-        let per_stage = [3i32, 5, 7];
-        (0..stages as usize)
-            .map(|i| per_stage.get(i).copied().unwrap_or(0))
-            .sum()
-    } else {
-        0
-    }
 }
 
 fn science_vp(symbols: &[String], played: &[String]) -> i32 {
@@ -105,6 +96,7 @@ fn science_vp(symbols: &[String], played: &[String]) -> i32 {
 
 fn guild_vp(
     card_db: &CardDatabase,
+    wonder_db: &WonderDatabase,
     guild_id: &str,
     player: usize,
     players: &[super::state::PlayerState],
@@ -144,7 +136,8 @@ fn guild_vp(
             wonder_stages(player) + wonder_stages(left) + wonder_stages(right)
         }
         "decorators_guild" => {
-            if players[player].board.wonder_stages_built >= 3 {
+            let total = wonder_db.total_stages(&players[player].board.wonder_id);
+            if total > 0 && players[player].board.wonder_stages_built >= total {
                 7
             } else {
                 0

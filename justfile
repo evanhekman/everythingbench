@@ -27,4 +27,4 @@ check:
 # Run all tests (Rust + Python card generators)
 test:
     cargo test
-    python3 -m unittest games.seven_wonders.scripts.test_generate_card_json games.seven_wonders.scripts.test_generate_player_cards
+    python3 -m unittest games.seven_wonders.scripts.test_generate_card_json games.seven_wonders.scripts.test_generate_player_cards games.seven_wonders.scripts.test_generate_wonder_json

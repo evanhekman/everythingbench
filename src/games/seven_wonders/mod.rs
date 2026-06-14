@@ -14,4 +14,8 @@ pub mod types;
 pub mod wonders;
 
 pub use self::controller::{FirstPurchaseableController, HumanLogController, LLMController};
-pub use self::state::{GameState, SevenWondersGameOutcome, run_game, run_limited_rounds_game};
+pub use self::state::{
+    GameState, SevenWondersGameOutcome, run_game, run_limited_rounds_game,
+    run_limited_rounds_game_with_boards,
+};
+pub use self::wonders::WonderDatabase;

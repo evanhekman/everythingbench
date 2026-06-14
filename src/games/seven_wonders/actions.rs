@@ -15,7 +15,13 @@ pub enum TerminalAction {
 
     /// Use the card to build the specified stage of the player's wonder.
     /// The card is tucked and removed from the player's available cards.
-    BuildWonder { card_id: String, stage: u8, trades: Vec<Trade> },
+    /// `discard_play`: when the stage grants a free play from the discard pile (Halikarnassos).
+    BuildWonder {
+        card_id: String,
+        stage: u8,
+        trades: Vec<Trade>,
+        discard_play: Option<String>,
+    },
 
     /// Discard the card for coins.
     BurnCard { card_id: String },

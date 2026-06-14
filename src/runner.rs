@@ -36,7 +36,7 @@ pub fn run_seven_wonders(
 
     use crate::games::seven_wonders::{
         controller::PlayerController, FirstPurchaseableController, GameState, HumanLogController,
-        LLMController, run_game, run_limited_rounds_game, term,
+        LLMController, run_limited_rounds_game_with_boards, term, WonderDatabase,
     };
     let mut llm_stats: Vec<Option<Rc<RefCell<LlmSeatStats>>>> =
         vec![None; player_count as usize];
@@ -70,14 +70,23 @@ pub fn run_seven_wonders(
         println!("  Player {}: {}", i, spec);
     }
 
-    let game = GameState::new(player_count);
+    let wonder_db = WonderDatabase::load();
+    let wonder_board_ids = wonder_db.assign_unique_random(player_count);
+    let game = GameState::new_with_assignment(player_count, wonder_board_ids.clone());
     for (p, controller) in controllers.iter_mut().enumerate() {
         controller.print_startup_context(&game, p);
     }
+    for (p, board_id) in wonder_board_ids.iter().enumerate() {
+        println!(
+            "  Player {} civilization: {}",
+            p,
+            wonder_db.display_name(board_id)
+        );
+    }
 
     let outcome = match max_rounds {
-        Some(n) => run_limited_rounds_game(controllers, n),
-        None => run_game(controllers),
+        Some(n) => run_limited_rounds_game_with_boards(controllers, n, Some(wonder_board_ids)),
+        None => run_limited_rounds_game_with_boards(controllers, u32::MAX, Some(wonder_board_ids)),
     };
 
     write_seven_wonders_results(

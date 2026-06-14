@@ -1,0 +1,75 @@
+alexandria, glass
+day
+[stone, stone]                          +3 points
+[ore, ore]                              +1 wood/stone/ore/brick
+[paper, cloth]                          +7 points
+
+night
+[brick, brick]                          +1 wood/stone/ore/brick
+[ore, ore, ore]                         +1 glass/paper/cloth
+[wood, wood, wood, wood]                +7 points
+
+babylon, wood
+day
+[brick, brick]                          +3 points
+[ore, ore, cloth]                       +1 tablet/compass/cog
+[wood, wood, wood, wood]                +7 points
+
+night
+[stone, stone]                          you may play both cards in the 6th round of each age.
+[brick, brick, brick, glass]            +1 tablet/compass/cog
+
+ephesos, paper
+day
+[brick, brick]                          +3 points
+[wood, wood]                            +9 coins
+[ore, ore, glass]                       +7 points
+
+night
+[stone, stone]                          +4 coins, +2 points
+[wood, wood]                            +4 coins, +3 points
+[ore, ore, cloth]                       +4 coins, +5 points
+
+gizah, stone
+day
+[wood, wood]                            +3 points
+[brick, brick, cloth]                   +5 points
+[stone, stone, stone, stone]            +7 points
+
+night
+[wood, wood]                            +3 points
+[stone, stone, stone]                   +5 points
+[brick, brick, brick]                   +5 points
+[stone, stone, stone, stone, paper]     +7 points
+
+halikarnassos, cloth
+day
+[ore, ore]                              +3 points
+[glass, cloth]                          play a card from the discard pile for free
+[stone, stone, stone]                   +7 points
+
+night
+[brick, brick]                          play a card from the discard pile for free
+[glass, cloth]                          play a card from the discard pile for free
+[wood, wood, wood]                      play a card from the discard pile for free
+
+olympia, brick
+day
+[stone, stone]                          +3 points
+[wood, wood, wood]                      the first card of each color you play is free
+[brick, brick, brick]                   +7 points
+
+night
+[ore, ore]                              +2 points, the first card you play each age is free
+[brick, brick, brick]                   +3 points, the last card you play each age is free
+[glass, paper, cloth]                   +5 points
+
+rhodos, ore
+day
+[wood, wood]                            +3 points
+[brick, brick, brick]                   +2 military
+[ore, ore, ore, ore]                    +7 points
+
+night
+[stone, stone, stone]                   +1 military, +3 coins, +3 points
+[ore, ore, ore, ore]                    +1 military, +4 coins, +4 points

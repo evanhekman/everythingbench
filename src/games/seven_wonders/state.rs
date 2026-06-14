@@ -5,7 +5,9 @@
 use super::actions::{ActionResult, SevenWondersAction, TerminalAction, Trade, Neighbor};
 use super::cards::CardDatabase;
 use super::log::GameLog;
-use super::wonders::{format_wonder_current_stage, format_wonder_stages_overview, stage_def, stage_to_cost};
+use super::wonders::{
+    format_wonder_current_stage, format_wonder_stages_overview, WonderDatabase, WonderStageEffect,
+};
 use super::scoring::{self, ScoreBreakdown};
 use super::types::{Cost, DiscountType, Effect, Resource, Resources};
 use serde_json::Value;
@@ -13,13 +15,15 @@ use serde_json::Value;
 /// Represents one player's board state.
 #[derive(Debug, Clone)]
 pub struct PlayerBoard {
-    pub wonder_id: String,           // Currently always "gizah_a"
-    pub wonder_stages_built: u8,     // 0-3 for Gizah A
+    pub wonder_id: String,
+    pub wonder_stages_built: u8,
     pub played_cards: Vec<String>,   // card ids
     pub coins: u8,
     pub military_victory_vp: u8,     // accumulated 1/3/5 VP from winning battles each age
     pub defeat_tokens: u8,           // each worth -1 VP at end of game
     pub science_symbols: Vec<String>,// "gear", "tablet", "compass"
+    pub wonder_military: i32,
+    pub wonder_choice_slots: Vec<Vec<Resource>>,
 }
 
 /// Full state for one player from the engine's perspective.
@@ -37,7 +41,10 @@ pub struct GameState {
     pub round_in_age: u8,            // 1..=6
     pub players: Vec<PlayerState>,
     pub card_db: CardDatabase,
-    pub current_round_actions: Vec<Option<TerminalAction>>,
+    pub wonder_db: WonderDatabase,
+    pub current_round_actions: Vec<Vec<TerminalAction>>,
+    /// Face-up discard pile (burns and end-of-age discards); most recent at end.
+    pub discard_pile: Vec<String>,
     // direction: true for left (player i passes to i+1), false for right
     pub pass_left: bool,
     pub game_over: bool,
@@ -47,24 +54,44 @@ pub struct GameState {
 }
 
 impl GameState {
-    /// Creates a new game with all players using Gizah A.
+    /// Creates a new game with a unique random civilization (wonder board) per player.
     /// Deals starting hands for Age 1.
     pub fn new(player_count: u8) -> Self {
+        Self::new_with_assignment(player_count, Self::default_board_assignment(player_count))
+    }
+
+    fn default_board_assignment(player_count: u8) -> Vec<String> {
+        let wonder_db = WonderDatabase::load();
+        #[cfg(test)]
+        {
+            wonder_db.assign_fixed(super::wonders::GIZAH_DAY_ID, player_count)
+        }
+        #[cfg(not(test))]
+        {
+            wonder_db.assign_unique_random(player_count)
+        }
+    }
+
+    pub fn new_with_assignment(player_count: u8, wonder_ids: Vec<String>) -> Self {
         assert!((2..=7).contains(&player_count));
+        assert_eq!(wonder_ids.len(), player_count as usize);
 
         let card_db = CardDatabase::load();
+        let wonder_db = WonderDatabase::load();
 
         let mut players = Vec::with_capacity(player_count as usize);
-        for _ in 0..player_count {
+        for wonder_id in wonder_ids {
             players.push(PlayerState {
                 board: PlayerBoard {
-                    wonder_id: "gizah_a".to_string(),
+                    wonder_id,
                     wonder_stages_built: 0,
                     played_cards: vec![],
                     coins: 3,
                     military_victory_vp: 0,
                     defeat_tokens: 0,
                     science_symbols: vec![],
+                    wonder_military: 0,
+                    wonder_choice_slots: vec![],
                 },
                 current_hand: vec![],
             });
@@ -76,7 +103,9 @@ impl GameState {
             round_in_age: 1,
             players,
             card_db,
-            current_round_actions: vec![None; player_count as usize],
+            wonder_db,
+            current_round_actions: vec![vec![]; player_count as usize],
+            discard_pile: vec![],
             pass_left: true, // age 1 and 3 left, age 2 right
             game_over: false,
             last_age_battle_deltas: vec![(0, 0); player_count as usize],
@@ -136,7 +165,7 @@ impl GameState {
         }
 
         self.round_in_age = 1;
-        self.current_round_actions = vec![None; n];
+        self.current_round_actions = vec![vec![]; n];
         self.pass_left = age != 2; // age 1,3 left (to +1), age 2 right (to -1)
     }
 
@@ -252,14 +281,19 @@ impl GameState {
         let right_prod = Self::format_production_list(&right_fixed, &right_choices);
 
         let wonder_id = &self.players[player].board.wonder_id;
+        let discard_line = if self.discard_pile.is_empty() {
+            "discard: []".to_string()
+        } else {
+            format!("discard: [{}]", self.discard_pile.join(", "))
+        };
         format!(
-            "hand: {}\ncoins: {}\n{}\n\
+            "hand: {}\ncoins: {}\n{}\n{discard_line}\n\
 your_production: [{}]\n\
 left (Player {}) production: [{}]\n\
 right (Player {}) production: [{}]\n",
             self.card_db.format_hand_block(hand),
             coins,
-            format_wonder_current_stage(wonder_id, stages),
+            format_wonder_current_stage(&self.wonder_db, wonder_id, stages),
             your_prod.join(", "),
             left_p,
             left_prod.join(", "),
@@ -270,7 +304,15 @@ right (Player {}) production: [{}]\n",
 
     /// All wonder stages for startup prompts (Gizah A).
     pub fn format_wonder_stages_overview(&self, player: usize) -> String {
-        format_wonder_stages_overview(&self.players[player].board.wonder_id)
+        format_wonder_stages_overview(
+            &self.wonder_db,
+            &self.players[player].board.wonder_id,
+        )
+    }
+
+    pub fn civilization_name(&self, player: usize) -> &str {
+        self.wonder_db
+            .display_name(&self.players[player].board.wonder_id)
     }
 
     pub(crate) fn format_production_list(fixed: &Resources, choices: &[Vec<Resource>]) -> Vec<String> {
@@ -347,12 +389,13 @@ right (Player {}) production: [{}]\n",
     }
 
     pub fn military_strength(&self, player: usize) -> i32 {
-        self.players[player]
+        let card_mil: i32 = self.players[player]
             .board
             .played_cards
             .iter()
             .map(|cid| self.card_military_strength(cid))
-            .sum()
+            .sum();
+        card_mil + self.players[player].board.wonder_military
     }
 
     fn apply_card_effect(&mut self, player: usize, card_id: &str) {
@@ -378,9 +421,60 @@ right (Player {}) production: [{}]\n",
     pub(crate) fn discard_end_of_age_cards(&mut self) {
         for player in &mut self.players {
             if player.current_hand.len() == 1 {
-                player.current_hand.clear();
+                let card = player.current_hand.pop().expect("single card");
+                self.discard_pile.push(card);
             }
         }
+    }
+
+    fn hand_card_id(action: &TerminalAction) -> &str {
+        match action {
+            TerminalAction::PlayCard { card_id, .. }
+            | TerminalAction::BuildWonder { card_id, .. }
+            | TerminalAction::BurnCard { card_id } => card_id,
+        }
+    }
+
+    fn has_built_effect(&self, player: usize, effect: WonderStageEffect) -> bool {
+        self.built_wonder_effects(player).contains(&effect)
+    }
+
+    pub fn actions_required_for_player(&self, player: usize) -> usize {
+        if self.round_in_age == 6 && self.has_built_effect(player, WonderStageEffect::SixthRoundExtraPlay) {
+            if self.players[player].current_hand.len() >= 2 {
+                return 2;
+            }
+        }
+        1
+    }
+
+    pub fn player_round_complete(&self, player: usize) -> bool {
+        self.current_round_actions[player].len() >= self.actions_required_for_player(player)
+    }
+
+    fn all_players_round_complete(&self) -> bool {
+        (0..self.player_count as usize).all(|p| self.player_round_complete(p))
+    }
+
+    fn validate_discard_play(&self, player: usize, card_id: &str) -> Result<(), String> {
+        if !self.discard_pile.iter().any(|c| c == card_id) {
+            return Err(format!("Card {} is not in the discard pile", card_id));
+        }
+        if self.players[player].board.played_cards.iter().any(|c| c == card_id) {
+            return Err(format!(
+                "You have already built {}; each card can only be played once",
+                card_id
+            ));
+        }
+        Ok(())
+    }
+
+    fn apply_discard_play(&mut self, player: usize, card_id: &str) {
+        if let Some(pos) = self.discard_pile.iter().position(|c| c == card_id) {
+            self.discard_pile.remove(pos);
+        }
+        self.players[player].board.played_cards.push(card_id.to_string());
+        self.apply_card_effect(player, card_id);
     }
 
     fn battle_reward_for_age(age: u8) -> u8 {
@@ -398,6 +492,7 @@ right (Player {}) production: [{}]\n",
         for i in 0..n {
             scores.push(scoring::compute_final_score(
                 &self.card_db,
+                &self.wonder_db,
                 i,
                 &self.players,
                 self.player_count,
@@ -411,6 +506,12 @@ right (Player {}) production: [{}]\n",
 
     fn compute_fixed_production(&self, player: usize) -> Resources {
         let mut prod = Resources::default();
+        if let Some(r) = self
+            .wonder_db
+            .token_resource_for(&self.players[player].board.wonder_id)
+        {
+            prod.add(r, 1);
+        }
         for cid in &self.players[player].board.played_cards {
             if let Some(card) = self.card_db.get(cid) {
                 if let Effect::Production { fixed, .. } = &card.effect {
@@ -435,7 +536,7 @@ right (Player {}) production: [{}]\n",
     }
 
     fn collect_choice_options_inner(&self, player: usize, exclude_non_tradeable: bool) -> Vec<Vec<Resource>> {
-        let mut choices = vec![];
+        let mut choices = self.players[player].board.wonder_choice_slots.clone();
         for cid in &self.players[player].board.played_cards {
             if exclude_non_tradeable && Self::NON_TRADEABLE_PRODUCTION_CARDS.contains(&cid.as_str()) {
                 continue;
@@ -572,9 +673,99 @@ right (Player {}) production: [{}]\n",
     }
 
     fn wonder_stage_cost(&self, wonder_id: &str, stage: u8) -> Cost {
-        stage_def(wonder_id, stage)
-            .map(|def| stage_to_cost(&def))
-            .unwrap_or_default()
+        self.wonder_db.stage_cost(wonder_id, stage)
+    }
+
+    fn built_wonder_effects(&self, player: usize) -> Vec<WonderStageEffect> {
+        let board_id = &self.players[player].board.wonder_id;
+        let built = self.players[player].board.wonder_stages_built;
+        let mut effects = Vec::new();
+        for stage in 1..=built {
+            if let Some(def) = self.wonder_db.stage(board_id, stage) {
+                if let Some(effect) = &def.effect {
+                    effects.push(*effect);
+                }
+            }
+        }
+        effects
+    }
+
+    fn wonder_free_play_applies(&self, player: usize, card_id: &str) -> bool {
+        let Some(card) = self.card_db.get(card_id) else {
+            return false;
+        };
+        let effects = self.built_wonder_effects(player);
+        if effects.contains(&WonderStageEffect::FirstPerAgeFree) && self.round_in_age == 1 {
+            return true;
+        }
+        if effects.contains(&WonderStageEffect::LastPerAgeFree) && self.round_in_age == 6 {
+            return true;
+        }
+        if effects.contains(&WonderStageEffect::FirstPerColorFree) {
+            let already_built_color = self.players[player].board.played_cards.iter().any(|cid| {
+                self.card_db
+                    .get(cid)
+                    .map(|c| c.color == card.color)
+                    .unwrap_or(false)
+            });
+            if !already_built_color {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn apply_wonder_stage_rewards(&mut self, player: usize, stage: u8) {
+        let board_id = self.players[player].board.wonder_id.clone();
+        let Some(stage_def) = self.wonder_db.stage(&board_id, stage).cloned() else {
+            return;
+        };
+        if stage_def.coins > 0 {
+            self.players[player].board.coins = self.players[player]
+                .board
+                .coins
+                .saturating_add(stage_def.coins as u8);
+        }
+        if stage_def.military > 0 {
+            self.players[player].board.wonder_military += stage_def.military;
+        }
+        if let Some(effect) = stage_def.effect {
+            match effect {
+                WonderStageEffect::ScienceChoice => {
+                    self.players[player]
+                        .board
+                        .science_symbols
+                        .push("compass".to_string());
+                }
+                WonderStageEffect::ProduceRawChoice => {
+                    self.players[player].board.wonder_choice_slots.push(vec![
+                        Resource::Wood,
+                        Resource::Stone,
+                        Resource::Ore,
+                        Resource::Clay,
+                    ]);
+                }
+                WonderStageEffect::ProduceManufacturedChoice => {
+                    self.players[player].board.wonder_choice_slots.push(vec![
+                        Resource::Glass,
+                        Resource::Loom,
+                        Resource::Papyrus,
+                    ]);
+                }
+                WonderStageEffect::PlayFromDiscard
+                | WonderStageEffect::SixthRoundExtraPlay
+                | WonderStageEffect::FirstPerColorFree
+                | WonderStageEffect::FirstPerAgeFree
+                | WonderStageEffect::LastPerAgeFree => {}
+            }
+        }
+    }
+
+    fn wonder_stage_grants_discard_play(&self, board_id: &str, stage: u8) -> bool {
+        self.wonder_db
+            .stage(board_id, stage)
+            .and_then(|s| s.effect)
+            == Some(WonderStageEffect::PlayFromDiscard)
     }
 
     fn validate_card_play(&self, player: usize, card_id: &str, trades: &[Trade]) -> Result<(), String> {
@@ -585,7 +776,7 @@ right (Player {}) production: [{}]\n",
                 card_id
             ));
         }
-        if self.satisfies_chain(player, &card.chain_from) {
+        if self.satisfies_chain(player, &card.chain_from) || self.wonder_free_play_applies(player, card_id) {
             return Ok(());
         }
         let cost = &card.cost;
@@ -607,12 +798,19 @@ right (Player {}) production: [{}]\n",
         Ok(())
     }
 
-    fn validate_wonder_stage(&self, player: usize, stage: u8, trades: &[Trade]) -> Result<(), String> {
+    fn validate_wonder_stage(
+        &self,
+        player: usize,
+        stage: u8,
+        trades: &[Trade],
+        discard_play: Option<&str>,
+    ) -> Result<(), String> {
         let current = self.players[player].board.wonder_stages_built;
         if stage != current + 1 {
             return Err("Can only build the next wonder stage in sequence".to_string());
         }
-        let wcost = self.wonder_stage_cost(&self.players[player].board.wonder_id, stage);
+        let board_id = self.players[player].board.wonder_id.clone();
+        let wcost = self.wonder_stage_cost(&board_id, stage);
         let bought = self.compute_bought(trades);
         if !self.player_can_cover(player, &wcost.resources, &bought) {
             return Err(format!("Insufficient resources to build wonder stage {} (not available from self or neighbors via specified trades)", stage));
@@ -628,13 +826,35 @@ right (Player {}) production: [{}]\n",
         if !self.trades_are_valid(player, trades) {
             return Err("Invalid trades for wonder: requested resources not supplied by the chosen neighbor(s) or violating combo rules".to_string());
         }
+
+        let grants_discard = self.wonder_stage_grants_discard_play(&board_id, stage);
+        match (grants_discard, discard_play) {
+            (true, None) if !self.discard_pile.is_empty() => {
+                return Err(
+                    "This wonder stage grants a free play from discard; add 'discard <card_id>' to your wonder action"
+                        .to_string(),
+                );
+            }
+            (false, Some(_)) => {
+                return Err(
+                    "discard play is only valid when building a wonder stage with that effect".to_string(),
+                );
+            }
+            (_, Some(card_id)) => self.validate_discard_play(player, card_id)?,
+            _ => {}
+        }
         Ok(())
     }
 
     fn validate_afford(&self, player: usize, action: &TerminalAction) -> Result<(), String> {
         match action {
             TerminalAction::PlayCard { card_id, trades } => self.validate_card_play(player, card_id, trades),
-            TerminalAction::BuildWonder { stage, trades, .. } => self.validate_wonder_stage(player, *stage, trades),
+            TerminalAction::BuildWonder {
+                stage,
+                trades,
+                discard_play,
+                ..
+            } => self.validate_wonder_stage(player, *stage, trades, discard_play.as_deref()),
             TerminalAction::BurnCard { .. } => Ok(()),
         }
     }
@@ -642,48 +862,47 @@ right (Player {}) production: [{}]\n",
     /// Submit a terminal action for the current round.
     /// If all players have submitted, resolves the round (applies actions, passes hands, etc.).
     pub fn submit_terminal_action(&mut self, player: usize, action: TerminalAction) -> ActionResult {
-        if self.current_round_actions[player].is_some() {
+        if self.player_round_complete(player) {
             return ActionResult::Invalid {
-                reason: "Already submitted action for this round".to_string(),
+                reason: "Already submitted all actions for this round".to_string(),
                 suggested_actions: vec![],
             };
         }
-        // Basic validation: card must be in hand
-        let card_id = match &action {
-            TerminalAction::PlayCard { card_id, .. } => card_id,
-            TerminalAction::BuildWonder { card_id, .. } => card_id,
-            TerminalAction::BurnCard { card_id } => card_id,
-        };
-        if !self.players[player].current_hand.contains(card_id) {
+        let card_id = Self::hand_card_id(&action);
+        if !self.players[player].current_hand.iter().any(|c| c == card_id) {
             return ActionResult::Invalid {
                 reason: format!("Card {} not in hand", card_id),
                 suggested_actions: vec![],
             };
         }
-        // Full afford / trade validation (resources from self+neighbors, coin costs incl. trades, supply limits)
+        if self
+            .current_round_actions[player]
+            .iter()
+            .any(|a| Self::hand_card_id(a) == card_id)
+        {
+            return ActionResult::Invalid {
+                reason: format!("Card {} already used for an action this round", card_id),
+                suggested_actions: vec![],
+            };
+        }
         if let Err(reason) = self.validate_afford(player, &action) {
             return ActionResult::Invalid {
                 reason,
                 suggested_actions: vec![],
             };
         }
-        self.current_round_actions[player] = Some(action);
-        if self.current_round_actions.iter().all(|a| a.is_some()) {
+        self.current_round_actions[player].push(action);
+        if self.all_players_round_complete() {
             self.resolve_round();
         }
         ActionResult::Success { message: Some("Action submitted for round".to_string()) }
     }
 
     fn resolve_round(&mut self) {
-        let actions: Vec<Option<TerminalAction>> = self.current_round_actions.clone();
-        for (i, opt_action) in actions.iter().enumerate() {
-            if let Some(action) = opt_action {
-                let card_id = match action {
-                    TerminalAction::PlayCard { card_id, .. } => card_id,
-                    TerminalAction::BuildWonder { card_id, .. } => card_id,
-                    TerminalAction::BurnCard { card_id } => card_id,
-                };
-                // Remove from hand
+        let actions: Vec<Vec<TerminalAction>> = self.current_round_actions.clone();
+        for (i, player_actions) in actions.iter().enumerate() {
+            for action in player_actions {
+                let card_id = Self::hand_card_id(action);
                 if let Some(pos) = self.players[i].current_hand.iter().position(|c| c == card_id) {
                     self.players[i].current_hand.remove(pos);
                 }
@@ -695,7 +914,8 @@ right (Player {}) production: [{}]\n",
                             .get(card_id)
                             .map(|c| self.satisfies_chain(i, &c.chain_from))
                             .unwrap_or(false);
-                        if !chained {
+                        let wonder_free = self.wonder_free_play_applies(i, card_id);
+                        if !chained && !wonder_free {
                             let card_c =
                                 self.card_db.get(card_id).map(|c| c.cost.coins as u32).unwrap_or(0);
                             let t_c = self.compute_trade_coins(i, trades);
@@ -705,15 +925,29 @@ right (Player {}) production: [{}]\n",
                         }
                         self.apply_card_effect(i, card_id);
                     }
-                    TerminalAction::BuildWonder { stage, trades, .. } => {
+                    TerminalAction::BuildWonder {
+                        stage,
+                        trades,
+                        discard_play,
+                        ..
+                    } => {
                         self.players[i].board.wonder_stages_built += 1;
-                        let w_c = self.wonder_stage_cost(&self.players[i].board.wonder_id, *stage).coins as u32;
+                        let w_c =
+                            self.wonder_stage_cost(&self.players[i].board.wonder_id, *stage).coins
+                                as u32;
                         let t_c = self.compute_trade_coins(i, trades);
                         let pay = (w_c + t_c) as u8;
-                        self.players[i].board.coins = self.players[i].board.coins.saturating_sub(pay);
+                        self.players[i].board.coins =
+                            self.players[i].board.coins.saturating_sub(pay);
+                        self.apply_wonder_stage_rewards(i, *stage);
+                        if let Some(discard_card) = discard_play {
+                            self.apply_discard_play(i, discard_card);
+                        }
                     }
-                    TerminalAction::BurnCard { .. } => {
-                        self.players[i].board.coins = self.players[i].board.coins.saturating_add(3);
+                    TerminalAction::BurnCard { card_id } => {
+                        self.players[i].board.coins =
+                            self.players[i].board.coins.saturating_add(3);
+                        self.discard_pile.push(card_id.clone());
                     }
                 }
             }
@@ -723,7 +957,7 @@ right (Player {}) production: [{}]\n",
         self.pass_hands();
 
         self.round_in_age += 1;
-        self.current_round_actions = vec![None; self.player_count as usize];
+        self.current_round_actions = vec![vec![]; self.player_count as usize];
 
         if self.round_in_age > 6 {
             self.discard_end_of_age_cards();
@@ -813,8 +1047,15 @@ fn format_action_summary_lines(game: &GameState, player: usize, action: &Termina
         TerminalAction::PlayCard { card_id, .. } => {
             lines.push(format!("Player {} played {}", player, card_id));
         }
-        TerminalAction::BuildWonder { stage, .. } => {
+        TerminalAction::BuildWonder {
+            stage,
+            discard_play,
+            ..
+        } => {
             lines.push(format!("Player {} built wonder stage {}", player, stage));
+            if let Some(card) = discard_play {
+                lines.push(format!("Player {} played {} from discard", player, card));
+            }
         }
         TerminalAction::BurnCard { card_id } => {
             lines.push(format!("Player {} burned {}", player, card_id));
@@ -869,11 +1110,22 @@ pub fn run_game(controllers: Vec<Box<dyn super::controller::PlayerController>>) 
 /// - Full log is written to log.txt after every decision close and every round (for live `cat log.txt` or `tail -f`).
 /// - Console also prints the FULL LOG and the exact PERSONALIZED VIEW SENT each time for the agent.
 pub fn run_limited_rounds_game(
-    mut controllers: Vec<Box<dyn super::controller::PlayerController>>,
+    controllers: Vec<Box<dyn super::controller::PlayerController>>,
     max_rounds: u32,
 ) -> SevenWondersGameOutcome {
+    run_limited_rounds_game_with_boards(controllers, max_rounds, None)
+}
+
+pub fn run_limited_rounds_game_with_boards(
+    mut controllers: Vec<Box<dyn super::controller::PlayerController>>,
+    max_rounds: u32,
+    wonder_board_ids: Option<Vec<String>>,
+) -> SevenWondersGameOutcome {
     let n = controllers.len() as u8;
-    let mut game = GameState::new(n);
+    let mut game = match wonder_board_ids {
+        Some(ids) => GameState::new_with_assignment(n, ids),
+        None => GameState::new(n),
+    };
     let mut game_log = GameLog::new();
 
     let is_smoke = max_rounds <= 4;
@@ -884,7 +1136,17 @@ pub fn run_limited_rounds_game(
     } else {
         ""
     };
-    println!("Starting Seven Wonders game{} with {} players (all Gizah A).", label, n);
+    println!("Starting Seven Wonders game{} with {} players.", label, n);
+    for p in 0..n as usize {
+        println!("  Player {} civilization: {}", p, game.civilization_name(p));
+        println!(
+            "    {}",
+            game.format_wonder_stages_overview(p)
+                .lines()
+                .next()
+                .unwrap_or("")
+        );
+    }
 
     game_log.start_age(game.current_age);
     println!("\n=== Age {} ===", game.current_age);
@@ -892,7 +1154,7 @@ pub fn run_limited_rounds_game(
     let mut total_rounds_played = 0u32;
     while total_rounds_played < max_rounds && !game.is_game_over() {
         let round = game.round_in_age;
-        game.current_round_actions = vec![None; n as usize];
+        game.current_round_actions = vec![vec![]; n as usize];
         println!("\n-- Round {} (Age {}) --", round, game.current_age);
 
         game_log.start_round(round);
@@ -936,10 +1198,18 @@ pub fn run_limited_rounds_game(
                             }
 
                             if matches!(res, ActionResult::Success { .. }) {
-                                let summary = format_action_summary_lines(&game, p, &term);
-                                game_log.close_current_decision(&summary);
-                                got_success = true;
-                                break;
+                                if game.player_round_complete(p) {
+                                    let summary: Vec<String> = game.current_round_actions[p]
+                                        .iter()
+                                        .flat_map(|a| format_action_summary_lines(&game, p, a))
+                                        .collect();
+                                    game_log.close_current_decision(&summary);
+                                    got_success = true;
+                                    break;
+                                }
+                                game_log.append_to_current_decision(
+                                    "Play your second card this round (Babylon sixth-round bonus).\n",
+                                );
                             } else if let ActionResult::Invalid { reason, .. } = res {
                                 let err = format_error_for_log(&reason);
                                 if is_human {
@@ -981,7 +1251,9 @@ pub fn run_limited_rounds_game(
                             if matches!(res, ActionResult::Success { .. }) {
                                 let summary = format_action_summary_lines(&game, p, &term);
                                 game_log.append_simple_player_action(&summary);
-                                break;
+                                if game.player_round_complete(p) {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1126,14 +1398,23 @@ mod tests {
 
     /// Invalid actions must not queue a round action or spend resources/coins early.
     fn assert_no_action_queued(game: &GameState, player: usize, card_id: &str, coins_before: u8) {
-        assert!(game.current_round_actions[player].is_none());
+        assert!(game.current_round_actions[player].is_empty());
         assert!(game.players[player].current_hand.contains(&card_id.to_string()));
         assert_eq!(game.players[player].board.coins, coins_before);
         assert!(!game.players[player].board.played_cards.contains(&card_id.to_string()));
     }
 
+    /// Default test boards use paper (Ephesos) so civilization tokens do not collide with
+    /// stone/wood/clay-focused scenarios.
+    fn new_resource_test_game(player_count: u8) -> GameState {
+        GameState::new_with_assignment(
+            player_count,
+            vec!["ephesos_day".to_string(); player_count as usize],
+        )
+    }
+
     fn setup_round2_player1_scenario() -> GameState {
-        let mut game = GameState::new(3);
+        let mut game = new_resource_test_game(3);
         // Mirror log: after age-1 round 1, player 1 chose guard_tower; neighbors played red cards.
         game.players[0].board.played_cards = vec!["barracks".to_string()];
         game.players[1].board.played_cards = vec!["guard_tower".to_string()];
@@ -1150,18 +1431,22 @@ mod tests {
         game
     }
 
-    fn burn_for_other_players(game: &mut GameState, skip: usize) {
+    /// Test helper: have every player except `focal` burn until the round can resolve.
+    fn complete_round_for_tests(game: &mut GameState, focal: usize) {
         for p in 0..game.player_count as usize {
-            if p == skip {
+            if p == focal {
                 continue;
             }
-            game.players[p].current_hand = vec!["lumber_yard".to_string()];
-            let _ = game.submit_terminal_action(
-                p,
-                TerminalAction::BurnCard {
-                    card_id: "lumber_yard".to_string(),
-                },
-            );
+            while !game.player_round_complete(p) {
+                if game.players[p].current_hand.is_empty() {
+                    game.players[p].current_hand.push("lumber_yard".to_string());
+                }
+                let card = game.players[p].current_hand[0].clone();
+                let _ = game.submit_terminal_action(
+                    p,
+                    TerminalAction::BurnCard { card_id: card },
+                );
+            }
         }
     }
 
@@ -1181,7 +1466,7 @@ mod tests {
     fn wonder_stages_overview_lists_all_gizah_stages() {
         let game = GameState::new(3);
         let overview = game.format_wonder_stages_overview(0);
-        assert!(overview.contains("wonder stages (Gizah A)"));
+        assert!(overview.contains("Gizah (day)"));
         assert!(overview.contains("(1/3)"));
         assert!(overview.contains("(2/3)"));
         assert!(overview.contains("(3/3)"));
@@ -1303,6 +1588,7 @@ mod tests {
             card_id: "lumber_yard".to_string(),
             stage: 1,
             trades: vec![],
+            discard_play: None,
         };
         let res = game.submit_terminal_action(0, action);
         if let ActionResult::Invalid { reason, .. } = res {
@@ -1328,6 +1614,7 @@ mod tests {
                 Trade { from: Neighbor::Left, resource: Resource::Wood },
                 Trade { from: Neighbor::Left, resource: Resource::Wood },
             ],
+            discard_play: None,
         };
         let res = game.submit_terminal_action(0, action);
         if let ActionResult::Invalid { reason, .. } = res {
@@ -1398,7 +1685,7 @@ mod tests {
 
     #[test]
     fn cannot_buy_resources_from_neighbor_caravansery_or_forum() {
-        let mut game = GameState::new(3);
+        let mut game = new_resource_test_game(3);
         game.players[0].current_hand = vec!["baths".to_string()];
         game.players[0].board.coins = 10;
         game.players[2].board.played_cards = vec!["caravansery".to_string()];
@@ -1704,7 +1991,7 @@ mod tests {
     fn round2_log_hand_allows_free_and_coin_only_cards() {
         let mut game = setup_round2_player1_scenario();
         let player = 1;
-        burn_for_other_players(&mut game, player);
+        complete_round_for_tests(&mut game, player);
 
         let res_pool = game.submit_terminal_action(
             player,
@@ -1718,7 +2005,7 @@ mod tests {
         assert_eq!(game.players[player].board.coins, 3);
 
         let mut game2 = setup_round2_player1_scenario();
-        burn_for_other_players(&mut game2, player);
+        complete_round_for_tests(&mut game2, player);
         let res_pit = game2.submit_terminal_action(
             player,
             TerminalAction::PlayCard {
@@ -1730,7 +2017,7 @@ mod tests {
         assert_eq!(game2.players[player].board.coins, 2);
 
         let mut game3 = setup_round2_player1_scenario();
-        burn_for_other_players(&mut game3, player);
+        complete_round_for_tests(&mut game3, player);
         let res_post = game3.submit_terminal_action(
             player,
             TerminalAction::PlayCard {
@@ -1780,7 +2067,7 @@ mod tests {
 
     #[test]
     fn play_fails_when_unaffordable_without_trades() {
-        let mut game = GameState::new(3);
+        let mut game = new_resource_test_game(3);
         game.players[0].current_hand = vec!["baths".to_string()];
         game.players[0].board.coins = 10;
         // baths costs 1 stone; no producer on board and no trades specified
@@ -1839,7 +2126,7 @@ mod tests {
 
     #[test]
     fn play_fails_when_trading_from_wrong_neighbor() {
-        let mut game = GameState::new(3);
+        let mut game = new_resource_test_game(3);
         // p0 right neighbor is p1; stone only on p1
         game.players[0].current_hand = vec!["baths".to_string()];
         game.players[0].board.coins = 10;
@@ -1869,9 +2156,150 @@ mod tests {
                 card_id: "lumber_yard".to_string(),
                 stage: 1,
                 trades: vec![],
+                discard_play: None,
             },
         );
         expect_invalid(res, "insufficient resources");
+    }
+
+    #[test]
+    fn halikarnassos_wonder_stage_plays_from_discard() {
+        let mut game =
+            GameState::new_with_assignment(3, vec!["halikarnassos_day".into(); 3]);
+        game.discard_pile = vec!["well".to_string()];
+        game.players[0].board.wonder_stages_built = 1;
+        game.players[0].board.played_cards =
+            vec!["glassworks".to_string(), "loom".to_string()];
+        game.players[0].current_hand = vec!["stone_pit".to_string()];
+        let stage2 = TerminalAction::BuildWonder {
+            card_id: "stone_pit".to_string(),
+            stage: 2,
+            trades: vec![],
+            discard_play: Some("well".to_string()),
+        };
+        assert!(matches!(
+            game.submit_terminal_action(0, stage2),
+            ActionResult::Success { .. }
+        ));
+        complete_round_for_tests(&mut game, 0);
+        assert!(!game.discard_pile.contains(&"well".to_string()));
+        assert!(game.players[0].board.played_cards.contains(&"well".to_string()));
+    }
+
+    #[test]
+    fn babylon_night_allows_two_plays_on_round_six() {
+        let mut game = GameState::new_with_assignment(3, vec!["babylon_night".into(); 3]);
+        game.round_in_age = 6;
+        game.players[0].current_hand = vec!["lumber_yard".to_string(), "ore_vein".to_string()];
+        game.players[0].board.wonder_stages_built = 1; // sixth-round effect unlocked
+        assert_eq!(game.actions_required_for_player(0), 2);
+
+        let play1 = TerminalAction::PlayCard {
+            card_id: "lumber_yard".to_string(),
+            trades: vec![],
+        };
+        assert!(matches!(
+            game.submit_terminal_action(0, play1),
+            ActionResult::Success { .. }
+        ));
+        assert!(!game.player_round_complete(0));
+
+        let play2 = TerminalAction::BurnCard {
+            card_id: "ore_vein".to_string(),
+        };
+        assert!(matches!(
+            game.submit_terminal_action(0, play2),
+            ActionResult::Success { .. }
+        ));
+    }
+
+    #[test]
+    fn ephesos_starting_paper_does_not_block_press() {
+        let mut game = GameState::new_with_assignment(3, vec!["ephesos_day".into(); 3]);
+        game.players[0].current_hand = vec!["press".to_string()];
+        let action = TerminalAction::PlayCard {
+            card_id: "press".to_string(),
+            trades: vec![],
+        };
+        assert!(
+            game.is_valid_terminal_action(0, &action),
+            "ephesos paper token is production, not a played press card"
+        );
+    }
+
+    #[test]
+    fn civilization_token_appears_in_production() {
+        let game = GameState::new_with_assignment(3, vec!["ephesos_day".into(); 3]);
+        let prod = game.compute_fixed_production(0);
+        assert_eq!(prod.counts.get(&Resource::Papyrus), Some(&1));
+    }
+
+    #[test]
+    fn olympia_night_first_card_of_each_age_is_free_on_round_one() {
+        let mut game = GameState::new_with_assignment(3, vec!["olympia_night".into(); 3]);
+        game.current_age = 2;
+        game.round_in_age = 1;
+        game.players[0].board.wonder_stages_built = 1;
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 0;
+        let action = TerminalAction::PlayCard {
+            card_id: "baths".to_string(),
+            trades: vec![],
+        };
+        assert!(game.is_valid_terminal_action(0, &action));
+        assert!(matches!(
+            game.submit_terminal_action(0, action),
+            ActionResult::Success { .. }
+        ));
+        complete_round_for_tests(&mut game, 0);
+        assert_eq!(game.players[0].board.coins, 0);
+    }
+
+    #[test]
+    fn olympia_night_last_card_of_age_is_free() {
+        let mut game = GameState::new_with_assignment(3, vec!["olympia_night".into(); 3]);
+        game.round_in_age = 6;
+        game.players[0].board.wonder_stages_built = 2; // last-per-age-free unlocked
+        game.players[0].current_hand = vec!["baths".to_string()];
+        game.players[0].board.coins = 0;
+        let action = TerminalAction::PlayCard {
+            card_id: "baths".to_string(),
+            trades: vec![],
+        };
+        assert!(game.is_valid_terminal_action(0, &action));
+        assert!(matches!(
+            game.submit_terminal_action(0, action.clone()),
+            ActionResult::Success { .. }
+        ));
+        complete_round_for_tests(&mut game, 0);
+        assert_eq!(game.players[0].board.coins, 0);
+        assert!(game.players[0].board.played_cards.contains(&"baths".to_string()));
+    }
+
+    #[test]
+    fn burn_adds_card_to_discard_pile() {
+        let mut game = GameState::new(3);
+        for p in 0..3 {
+            game.players[p].current_hand = vec![format!("lumber_yard")];
+        }
+        for p in 0..3 {
+            let _ = game.submit_terminal_action(
+                p,
+                TerminalAction::BurnCard {
+                    card_id: "lumber_yard".to_string(),
+                },
+            );
+        }
+        assert!(game.discard_pile.contains(&"lumber_yard".to_string()));
+    }
+
+    #[test]
+    fn end_of_age_discard_goes_to_pile() {
+        let mut game = GameState::new(3);
+        game.players[0].current_hand = vec!["lumber_yard".to_string()];
+        game.discard_end_of_age_cards();
+        assert_eq!(game.discard_pile, vec!["lumber_yard".to_string()]);
+        assert!(game.players[0].current_hand.is_empty());
     }
 
     #[test]
@@ -1900,7 +2328,7 @@ mod tests {
         game.players[0].board.coins = 1;
         game.players[0].board.played_cards = vec!["marketplace".to_string()];
         game.players[1].board.played_cards = vec!["glassworks".to_string()];
-        burn_for_other_players(&mut game, 0);
+        complete_round_for_tests(&mut game, 0);
         let res = game.submit_terminal_action(
             0,
             TerminalAction::PlayCard {
@@ -1919,7 +2347,7 @@ mod tests {
         game2.players[0].board.coins = 1;
         game2.players[0].board.played_cards = vec!["marketplace".to_string()];
         game2.players[2].board.played_cards = vec!["press".to_string()];
-        burn_for_other_players(&mut game2, 0);
+        complete_round_for_tests(&mut game2, 0);
         let res2 = game2.submit_terminal_action(
             0,
             TerminalAction::PlayCard {
@@ -1941,7 +2369,7 @@ mod tests {
         game.players[0].board.coins = 1;
         game.players[0].board.played_cards = vec!["west_trading_post".to_string()];
         game.players[2].board.played_cards = vec!["stone_pit".to_string()];
-        burn_for_other_players(&mut game, 0);
+        complete_round_for_tests(&mut game, 0);
         let res = game.submit_terminal_action(
             0,
             TerminalAction::PlayCard {
@@ -1981,7 +2409,7 @@ mod tests {
         game.players[0].board.coins = 1;
         game.players[0].board.played_cards = vec!["east_trading_post".to_string()];
         game.players[1].board.played_cards = vec!["stone_pit".to_string()];
-        burn_for_other_players(&mut game, 0);
+        complete_round_for_tests(&mut game, 0);
         let res = game.submit_terminal_action(
             0,
             TerminalAction::PlayCard {

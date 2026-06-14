@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "run_number": 3,
+  "run_number": 4,
   "model": "grok-build-0.1",
   "benchmark": "seven-wonders",
   "provider": "grok",
-  "timestamp": "2026-06-09T04:35:50.131969Z",
+  "timestamp": "2026-06-09T19:58:49.946880Z",
   "config": {
     "player_count": 3,
     "player_specs": [
-      "grok-build-0.1",
-      "grok-build-0.1",
+      "auto",
+      "human",
       "grok-build-0.1"
     ],
     "max_rounds": null,
@@ -19,63 +19,51 @@
   "players": [
     {
       "seat": 0,
-      "spec": "grok-build-0.1",
+      "spec": "auto",
       "score": {
-        "military_victory": 17,
-        "military_defeat": -1,
+        "military_victory": 5,
+        "military_defeat": -5,
         "treasury": 0,
         "wonders": 0,
-        "civilian": 7,
-        "science": 4,
-        "guilds": 6,
+        "civilian": 26,
+        "science": 2,
+        "guilds": 0,
         "commerce": 2,
-        "total": 35
-      },
-      "llm_stats": {
-        "decisions": 22,
-        "total_latency_ms": 105733,
-        "api_errors": 0,
-        "parse_failures": 0
+        "total": 30
       }
     },
     {
       "seat": 1,
-      "spec": "grok-build-0.1",
+      "spec": "human",
       "score": {
-        "military_victory": 0,
-        "military_defeat": -6,
+        "military_victory": 5,
+        "military_defeat": -3,
         "treasury": 1,
-        "wonders": 0,
-        "civilian": 16,
-        "science": 13,
-        "guilds": 0,
-        "commerce": 1,
-        "total": 25
-      },
-      "llm_stats": {
-        "decisions": 19,
-        "total_latency_ms": 150876,
-        "api_errors": 0,
-        "parse_failures": 0
+        "wonders": 15,
+        "civilian": 0,
+        "science": 9,
+        "guilds": 17,
+        "commerce": 9,
+        "total": 53
       }
     },
     {
       "seat": 2,
       "spec": "grok-build-0.1",
       "score": {
-        "military_victory": 10,
-        "military_defeat": -2,
+        "military_victory": 17,
+        "military_defeat": -1,
         "treasury": 1,
-        "wonders": 0,
-        "civilian": 18,
-        "science": 1,
+        "wonders": 8,
+        "civilian": 9,
+        "science": 0,
         "guilds": 0,
         "commerce": 1,
-        "total": 29
+        "total": 35
       },
       "llm_stats": {
         "decisions": 20,
-        "total_latency_ms": 185694,
+        "total_latency_ms": 206864,
         "api_errors": 0,
         "parse_failures": 0
       }
@@ -83,8 +71,8 @@
   ],
   "summary": {
     "winner_seats": [
-      0
+      1
     ],
-    "winning_score": 35
+    "winning_score": 53
   }
 }

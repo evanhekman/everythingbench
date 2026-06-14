@@ -120,6 +120,15 @@ To build a wonder stage, pay the cost of the wonder instead of the cost of your 
 wonder altar
 ```
 
+Some wonder stages also grant a free play from the face-up discard pile (listed in your decision info). When required, append `discard <card_id>`:
+```
+wonder stone_pit discard well
+```
+
+On round 6 of an age, Babylon (night) stage 1 lets you play two cards from your hand that round. Submit a second action after the first succeeds.
+
+Olympia (night) stage 1 makes your first card play of each age free on round 1. Stage 2 makes your last card play of each age free on round 6. Olympia (day) stage 2 makes the first card you build of each color free.
+
 If you need coins, you may burn a card for +3 coins. Example:
 ```
 burn pantheon
